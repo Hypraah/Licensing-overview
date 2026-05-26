@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Copart · Licensing Intelligence</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none'%3E%3Crect width='64' height='64' rx='16' fill='%23080c14'/%3E%3Cellipse cx='32' cy='32' rx='24' ry='16' fill='%23000' stroke='%23888' stroke-width='2'/%3E%3Ctext x='32' y='37' font-family='Inter,sans-serif' font-weight='900' font-style='italic' font-size='18' fill='%23fff' text-anchor='middle'%3ECopart%3C/text%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/globe.gl@2.32.1/dist/globe.gl.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.26.2/babel.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* ─── Design Tokens ─── */
+    :root {
+      --bg: #080c14;
+      --bg-2: #0d1220;
+      --surface: rgba(13, 18, 32, 0.85);
+      --surface-raised: rgba(18, 24, 42, 0.92);
+      --card: rgba(255, 255, 255, 0.04);
+      --card-hover: rgba(255, 255, 255, 0.07);
+      --card-active: rgba(34, 211, 238, 0.10);
+
+      --border: rgba(255, 255, 255, 0.07);
+      --border-hover: rgba(34, 211, 238, 0.35);
+      --border-strong: rgba(255, 255, 255, 0.12);
+
+      --text-1: #F1F5F9;
+      --text-2: #94A3B8;
+      --text-3: #64748B;
+      --text-4: rgba(255, 255, 255, 0.25);
+
+      --accent: #22D3EE;
+      --accent-dim: rgba(34, 211, 238, 0.12);
+      --accent-glow: rgba(34, 211, 238, 0.06);
+      --warning: #F59E0B;
+      --warning-dim: rgba(245, 158, 11, 0.10);
+      --success: #34D399;
+      --danger: #F87171;
+
+      --radius-panel: 18px;
+      --radius-card: 10px;
+      --radius-button: 8px;
+      --radius-pill: 999px;
+      --radius-input: 10px;
+
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Menlo', 'Monaco', monospace;
+
+      --shadow-panel: 0 32px 96px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+      --shadow-card: 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    /* ─── Typography System ─── */
+    .t-hero { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; color: var(--text-1); line-height: 1.2; }
+    .t-title { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-1); line-height: 1.3; }
+    .t-subtitle { font-size: 13px; font-weight: 500; color: var(--text-2); line-height: 1.5; }
+    .t-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+    .t-body { font-size: 13px; font-weight: 400; color: var(--text-2); line-height: 1.6; }
+    .t-mono { font-family: var(--font-mono); font-size: 12px; color: var(--text-2); line-height: 1.65; }
+    .t-small { font-size: 11px; color: var(--text-3); line-height: 1.5; }
+    .t-accent { color: var(--accent); }
+    .t-warning { color: var(--warning); }
+
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+    .divider-strong { height: 1px; background: var(--border-strong); margin: 20px 0; }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text-1);
+      font-family: var(--font-sans);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      margin: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ─── Scrollbar ─── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(34, 211, 238, 0.2); }
+
+    /* ─── Background Layers ─── */
+    .bg-noise {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      opacity: 0.006;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      background-size: 128px 128px;
+    }
+
+    .bg-vignette {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background: radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(8, 12, 20, 0.75) 100%);
+    }
+
+    /* ─── Panel ─── */
+    .panel {
+      background: var(--surface);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-panel);
+      box-shadow: var(--shadow-panel);
+    }
+
+    /* ─── Tooltip ─── */
+    .globe-tooltip {
+      background: rgba(13, 18, 32, 0.95) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 8px !important;
+      padding: 6px 12px !important;
+      font-family: var(--font-sans) !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      color: var(--text-1) !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+      backdrop-filter: blur(12px);
+      line-height: 1.4 !important;
+    }
+    .globe-tooltip .tt-type {
+      font-size: 11px;
+      color: var(--text-3);
+      margin-top: 1px;
+    }
+
+    /* ─── Focus Ring ─── */
+    *:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 6px;
+    }
+
+    /* ─── Selection ─── */
+    ::selection { background: rgba(34, 211, 238, 0.2); }
+
+    /* ─── Keyframes ─── */
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.02); opacity: 1; }
+    }
+
+    @keyframes irisOpen {
+      from { clip-path: circle(0% at 50% 50%); }
+      to { clip-path: circle(150% at 50% 50%); }
+    }
+
+    @keyframes shimmerDown {
+      0% { top: 0; opacity: 0.4; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    @keyframes copyPulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+
+    /* ─── Custom Cursor ─── */
+    @media (pointer: fine) {
+      body, button, a, select, input, tr, [onClick], [role="button"] {
+        cursor: none !important;
+      }
+    }
+  </style>
+
+  <script>
+    window.onerror = function(msg, src, line, col, err) {
+      if (document.getElementById('crash-overlay')) return false;
+      const d = document.createElement('div');
+      d.id = 'crash-overlay';
+      Object.assign(d.style, { position:'fixed', inset:'0', zIndex:'99999', background:'#05070a', color:'#ff6b6b', padding:'48px', fontFamily:'monospace', overflowY:'auto' });
+      d.innerHTML = '<h1 style="font-size:20px;margin-bottom:16px">Runtime Error</h1><pre style="background:#0a0e18;padding:24px;border-radius:16px;color:#b8c0cc;white-space:pre-wrap;border:1px solid rgba(255,255,255,0.06)">' + (err && err.stack ? err.stack : msg) + '</pre>';
+      (document.body || document.documentElement).prepend(d);
+      return false;
+    };
+    window.addEventListener('unhandledrejection', function(e) {
+      window.onerror(String(e.reason), '', 0, 0, e.reason);
+    });
+  </script>
+</head>
+<body>
+  <div class="bg-noise"></div>
+  <div class="bg-vignette"></div>
+
+  <div id="root" style="position:relative;z-index:1;width:100%;height:100vh;overflow:hidden;display:flex;flex-direction:column"></div>
+
+  <script>
+    window.USA_DATA = __USA_DATA__;
+    window.CANADA_DATA = __CANADA_DATA__;
+    window.INTL_DATA = __INTL_DATA__;
+  </script>
+
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect, useRef, useMemo, useCallback } from "https://cdn.jsdelivr.net/npm/react@18.3.1/+esm";
+    import { createRoot } from "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/client/+esm";
+    import { motion, AnimatePresence } from "https://cdn.jsdelivr.net/npm/framer-motion@11.11.17/+esm";
+    import {
+      Globe2, Search, FileText, Copy, Check, ExternalLink, Download,
+      MapPin, List, Compass, Shield, X, ChevronRight, AlertTriangle
+    } from "https://cdn.jsdelivr.net/npm/lucide-react@0.468.0/+esm";
+
+    const ease = [0.22, 1, 0.36, 1];
+    const spring = { duration: 0.3, ease };
+    const microEase = { duration: 0.18, ease: [0.22, 1, 0.36, 1] };
+
+    const getProvCode = (name) => {
+      const codes = {'Alberta':'AB','British Columbia':'BC','Manitoba':'MB','New Brunswick':'NB','Newfoundland & Labrador':'NL','Newfoundland and Labrador':'NL','Northwest Territories':'NT','Nova Scotia':'NS','Nunavut':'NU','Ontario':'ON','Prince Edward Island':'PE','Quebec':'QC','Saskatchewan':'SK','Yukon':'YT'};
+      return codes[name] || 'ON';
+    };
+
+    // ─── Flag ISO Code Mapper ───
+    const COUNTRY_ISO = {
+      'Afghanistan':'af','Albania':'al','Algeria':'dz','Angola':'ao','Argentina':'ar','Armenia':'am','Australia':'au',
+      'Austria':'at','Azerbaijan':'az','Bahrain':'bh','Bangladesh':'bd','Belarus':'by','Belgium':'be',
+      'Belize':'bz','Benin':'bj','Bolivia':'bo','Bosnia':'ba','Botswana':'bw','Brazil':'br',
+      'Bulgaria':'bg','Burkina Faso':'bf','Burundi':'bi','Cambodia':'kh','Cameroon':'cm','Canada':'ca',
+      'Central African Republic':'cf','Chad':'td','Chile':'cl','China':'cn','Colombia':'co','Comoros':'km',
+      'Congo':'cg','Costa Rica':'cr',"Cote d'Group":'ci',"Cote d'Ivoire":'ci','Croatia':'hr','Cuba':'cu','Cyprus':'cy',
+      'Czech Republic':'cz','Denmark':'dk','Djibouti':'dj','Dominican Republic':'do','DRC':'cd',
+      'Ecuador':'ec','Egypt':'eg','El Salvador':'sv','Equatorial Guinea':'gq','Eritrea':'er',
+      'Estonia':'ee','Eswatini':'sz','Ethiopia':'et','Fiji':'fj','Finland':'fi','France':'fr',
+      'Gabon':'ga','Gambia':'gm','Georgia':'ge','Germany':'de','Ghana':'gh','Greece':'gr',
+      'Guatemala':'gt','Guinea':'gn','Guinea-Bissau':'gw','Guyana':'gy','Haiti':'ht','Honduras':'hn',
+      'Hong Kong':'hk','Hungary':'hu','Iceland':'is','India':'in','Indonesia':'id','Iran':'ir',
+      'Iraq':'iq','Ireland':'ie','Israel':'il','Italy':'it','Jamaica':'jm','Japan':'jp',
+      'Jordan':'jo','Kazakhstan':'kz','Kenya':'ke','Kosovo':'xk','Kuwait':'kw','Kyrgyzstan':'kg',
+      'Laos':'la','Latvia':'lv','Lebanon':'lb','Lesotho':'ls','Liberia':'lr','Libya':'ly',
+      'Lithuania':'lt','Luxembourg':'lu','Madagascar':'mg','Malawi':'mw','Malaysia':'my','Mali':'ml',
+      'Mauritania':'mr','Mauritius':'mu','Mexico':'mx','Moldova':'md','Mongolia':'mn','Montenegro':'me',
+      'Morocco':'ma','Mozambique':'mz','Myanmar':'mm','Namibia':'na','Nepal':'np','Netherlands':'nl',
+      'New Zealand':'nz','Nicaragua':'ni','Niger':'ne','Nigeria':'ng','North Macedonia':'mk','Oman':'om',
+      'Pakistan':'pk','Palestine':'ps','Panama':'pa','Papua New Guinea':'pg','Paraguay':'py','Peru':'pe',
+      'Philippines':'ph','Poland':'pl','Portugal':'pt','Qatar':'qa','Romania':'ro','Russia':'ru',
+      'Rwanda':'rw','Saudi Arabia':'sa','Senegal':'sn','Serbia':'rs','Sierra Leone':'sl','Singapore':'sg',
+      'Slovakia':'sk','Slovenia':'si','Somalia':'so','South Africa':'za','South Korea':'kr','South Sudan':'ss',
+      'Spain':'es','Sri Lanka':'lk','Sudan':'sd','Suriname':'sr','Sweden':'se','Switzerland':'ch',
+      'Syria':'sy','Taiwan':'tw','Tajikistan':'tj','Tanzania':'tz','Thailand':'th','Togo':'tg',
+      'Trinidad':'tt','Tunisia':'tn','Turkey':'tr','Turkmenistan':'tm','UAE':'ae','Uganda':'ug',
+      'Ukraine':'ua','United Kingdom':'gb','United States':'us','Uruguay':'uy','Uzbekistan':'uz',
+      'Venezuela':'ve','Vietnam':'vn','Yemen':'ye','Zambia':'zm','Zimbabwe':'zw',
+      'Republic of Djibouti':'dj','Republic of Moldova':'md'
+    };
+
+    const getFlagCode = (loc) => {
+      if (!loc) return null;
+      if (loc.regionType === 'usa_state') return 'us';
+      if (loc.regionType === 'canada_province') return 'ca';
+      return COUNTRY_ISO[loc.name] || COUNTRY_ISO[loc.country] || null;
+    };
+
+    // ─── Flag Image Component (renders real flag images from flagcdn.com) ───
+    const RegionFlag = ({ loc, size = 18 }) => {
+      const code = getFlagCode(loc);
+      const [err, setErr] = useState(false);
+      if (!code || err) {
+        // Fallback: globe icon SVG
+        return (
+          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}>
+            <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        );
+      }
+      const w = Math.round(size * 1.5);
+      return (
+        <img
+          src={`https://flagcdn.com/w40/${code}.png`}
+          srcSet={`https://flagcdn.com/w80/${code}.png 2x`}
+          alt={code.toUpperCase()}
+          width={w}
+          height={size}
+          onError={() => setErr(true)}
+          style={{ flexShrink:0, objectFit:'cover', borderRadius:3, border:'1px solid rgba(255,255,255,0.08)', display:'block' }}
+        />
+      );
+    };
+
+    // ─── State Badge (for USA states showing abbreviation) ───
+    const StateBadge = ({ code, size = 18 }) => (
+      <div style={{ width: size * 1.5, height: size, borderRadius: 3, background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}>{code}</span>
+      </div>
+    );
+
+    // ─── Province Badge (for Canadian provinces) ───
+    const ProvBadge = ({ name, size = 18 }) => (
+      <div style={{ width: size * 1.5, height: size, borderRadius: 3, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: '#FCA5A5', fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}>{getProvCode(name)}</span>
+      </div>
+    );
+
+    // ─── Composite Flag Renderer: flag image + optional badge ───
+    const FlagDisplay = ({ loc, size = 16 }) => {
+      if (!loc) return <RegionFlag loc={null} size={size} />;
+      if (loc.regionType === 'usa_state') {
+        return (
+          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+            <RegionFlag loc={loc} size={size} />
+            <StateBadge code={loc.code} size={size} />
+          </div>
+        );
+      }
+      if (loc.regionType === 'canada_province') {
+        return (
+          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+            <RegionFlag loc={loc} size={size} />
+            <ProvBadge name={loc.name} size={size} />
+          </div>
+        );
+      }
+      return <RegionFlag loc={loc} size={size} />;
+    };
+
+    // ─── Hierarchical Raw Text Copy-Paste Response Generator ───
+    const isListItem = (str) => {
+      if (!str) return false;
+      return /^\s*([A-Za-z0-9]+[\.\\)]|[-•*])\s*/.test(str.trim());
+    };
+
+    const generateRawResponse = (loc) => {
+      if (!loc) return '';
+      let text = `${loc.name}\n${loc.generalReq || ''}\n\n`;
+      if (loc.raw && loc.raw.requirements) {
+        loc.raw.requirements.forEach(sec => {
+          const secName = sec.section || '';
+          const isGeneral = secName.toLowerCase().startsWith('general requirements');
+          if (!isGeneral) {
+            text += `${secName}\n`;
+          }
+          const isSecNumbered = /^\s*\d+[\.\s]/.test(secName);
+          const itemIndent = isSecNumbered ? '\t' : '';
+          (sec.items || []).forEach(it => {
+            text += `${itemIndent}${it.name}\n`;
+            let hasDesc = false;
+            if (it.description && it.description.trim()) {
+              hasDesc = true;
+              const desc = it.description.trim();
+              if (isListItem(desc)) {
+                text += `${itemIndent}${desc}\n`;
+              } else {
+                text += `${itemIndent}\t${desc}\n`;
+              }
+            }
+            if (it.issuedBy && it.issuedBy.trim()) {
+              const issued = it.issuedBy.trim();
+              if (hasDesc) {
+                const desc = it.description.trim();
+                if (isListItem(desc)) {
+                  text += `${itemIndent}\t${issued}\n`;
+                } else {
+                  text += `${itemIndent}\t\t${issued}\n`;
+                }
+              } else {
+                text += `${itemIndent}\t${issued}\n`;
+              }
+            }
+          });
+          text += `\n`;
+        });
+      }
+      return text.trim() + '\n';
+    };
+
+    // ─── Official Links Dictionary ───
+    const USA_LINKS = {
+      AL:{t:"Alabama Department of Revenue",u:"https://revenue.alabama.gov/motor-vehicle/"},AK:{t:"Alaska DMV",u:"https://doa.alaska.gov/dmv/"},AZ:{t:"Arizona MVD",u:"https://azdot.gov/mvd"},AR:{t:"Arkansas Motor Vehicle Office",u:"https://www.dfa.arkansas.gov/office-of-motor-vehicle/"},CA:{t:"California DMV",u:"https://www.dmv.ca.gov/"},CO:{t:"Colorado DMV",u:"https://dmv.colorado.gov/"},CT:{t:"Connecticut DMV",u:"https://portal.ct.gov/DMV"},DE:{t:"Delaware DMV",u:"https://dmv.de.gov/"},FL:{t:"Florida DHSMV",u:"https://www.flhsmv.gov/"},GA:{t:"Georgia DOR Motor Vehicles",u:"https://dor.georgia.gov/motor-vehicles"},HI:{t:"Hawaii DOT",u:"https://hidot.hawaii.gov/"},ID:{t:"Idaho DMV",u:"https://itd.idaho.gov/itddmv/"},IL:{t:"Illinois Secretary of State",u:"https://www.ilsos.gov/"},IN:{t:"Indiana BMV",u:"https://www.in.gov/bmv/"},IA:{t:"Iowa DOT MVD",u:"https://iowadot.gov/mvd"},KS:{t:"Kansas Dept of Revenue",u:"https://www.ksrevenue.gov/dovindex.html"},KY:{t:"Kentucky Transportation Cabinet",u:"https://transportation.ky.gov/"},LA:{t:"Louisiana OMV",u:"https://www.expresslane.org/"},ME:{t:"Maine BMV",u:"https://www.maine.gov/sos/bmv/"},MD:{t:"Maryland MVA",u:"https://mva.maryland.gov/"},MA:{t:"Massachusetts RMV",u:"https://www.mass.gov/orgs/massachusetts-registry-of-motor-vehicles"},MI:{t:"Michigan Secretary of State",u:"https://www.michigan.gov/sos"},MN:{t:"Minnesota DVS",u:"https://dps.mn.gov/divisions/dvs/"},MS:{t:"Mississippi DOR",u:"https://www.dor.ms.gov/motor-vehicle"},MO:{t:"Missouri DOR Motor Vehicle",u:"https://dor.mo.gov/motor-vehicle/"},MT:{t:"Montana DOJ Driving",u:"https://dojmt.gov/driving/"},NE:{t:"Nebraska DMV",u:"https://dmv.nebraska.gov/"},NV:{t:"Nevada DMV",u:"https://dmv.nv.gov/"},NH:{t:"New Hampshire DMV",u:"https://www.dmv.nh.gov/"},NJ:{t:"New Jersey MVC",u:"https://www.nj.gov/mvc/"},NM:{t:"New Mexico MVD",u:"https://www.mvd.newmexico.gov/"},NY:{t:"New York DMV",u:"https://dmv.ny.gov/"},NC:{t:"North Carolina DMV",u:"https://www.ncdot.gov/dmv/"},ND:{t:"North Dakota DOT",u:"https://www.dot.nd.gov/"},OH:{t:"Ohio BMV",u:"https://bmv.ohio.gov/"},OK:{t:"Service Oklahoma",u:"https://service.ok.gov/"},OR:{t:"Oregon DMV",u:"https://www.oregon.gov/odot/DMV/"},PA:{t:"Pennsylvania PennDOT",u:"https://www.dmv.pa.gov/"},RI:{t:"Rhode Island DMV",u:"https://dmv.ri.gov/"},SC:{t:"South Carolina DMV",u:"https://bcdmvonline.com/"},SD:{t:"South Dakota DOR",u:"https://dor.sd.gov/individuals/motor-vehicle/"},TN:{t:"Tennessee DOR",u:"https://www.tn.gov/revenue/taxes/motor-vehicle.html"},TX:{t:"Texas DMV",u:"https://www.txdmv.gov/"},UT:{t:"Utah DMV",u:"https://dmv.utah.gov/"},VT:{t:"Vermont DMV",u:"https://dmv.vermont.gov/"},VA:{t:"Virginia DMV",u:"https://www.dmv.virginia.gov/"},WA:{t:"Washington DOL",u:"https://www.dol.wa.gov/"},WV:{t:"West Virginia DMV",u:"https://transportation.wv.gov/dmv/"},WI:{t:"Wisconsin DOT",u:"https://wisconsindot.gov/"},WY:{t:"Wyoming DOT",u:"https://www.dot.state.wy.us/home/titles_plates_registration.html"},DC:{t:"DC DMV",u:"https://dmv.dc.gov/"}
+    };
+    const CA_LINKS = {
+      AB:{t:"Alberta Transportation",u:"https://www.alberta.ca/transportation.aspx"},BC:{t:"ICBC",u:"https://www.icbc.com/"},MB:{t:"Manitoba Public Insurance",u:"https://www.mpi.mb.ca/"},NB:{t:"Service New Brunswick",u:"https://www2.snb.ca/"},NL:{t:"NL Digital Government",u:"https://www.gov.nl.ca/dgsl/"},NS:{t:"Access Nova Scotia",u:"https://novascotia.ca/sns/access/"},ON:{t:"ServiceOntario",u:"https://www.ontario.ca/page/ministry-transportation"},PE:{t:"Access PEI",u:"https://www.princeedwardisland.ca/en/topic/transportation-infrastructure-and-energy"},QC:{t:"SAAQ",u:"https://saaq.gouv.qc.ca/"},SK:{t:"SGI Saskatchewan",u:"https://www.sgi.sk.ca/"},YT:{t:"Yukon Motor Vehicles",u:"https://yukon.ca/en/driving-and-transportation"},NT:{t:"NWT Infrastructure",u:"https://www.inf.gov.nt.ca/"},NU:{t:"Nunavut Motor Vehicles",u:"https://www.gov.nu.ca/"}
+    };
+
+    // ─── Requirement Mapper ───
+    const buildRequirements = (item, accType) => {
+      const sections = item.requirements || [];
+      const roles = item.permittedRoles || {};
+      const allDocs = [];
+      sections.forEach(s => (s.items || []).forEach(it => allDocs.push({ name: it.name, desc: it.description, issuedBy: it.issuedBy, section: s.section })));
+      let summary = `Requirements for ${item.name} (${accType}).`;
+      let docs = [];
+      let docsWithMeta = [];
+      let licenses = roles.acceptable && roles.acceptable.length > 0 ? roles.acceptable : [];
+      let tax = [];
+      let forms = [];
+      let notes = [];
+      const isDomestic = item.type === 'usa' || item.type === 'canada';
+      const lo = s => (s || '').toLowerCase();
+      const bidCardItems = allDocs.filter(d => lo(d.name).includes('bid card') || (lo(d.section).includes('general') && lo(d.name).includes('bid')));
+      if (isDomestic) {
+        if (accType === 'dealer') {
+          summary = `Dealer licensing requirements for ${item.name}. ${item.generalReq || ''}`;
+          docs = allDocs.filter(d => lo(d.name).includes('dealer') || lo(d.name).includes('dismantler') || lo(d.name).includes('rebuilder') || lo(d.section).includes('operational')).map(d => d.name);
+          docs.unshift("Government-issued photo ID (Passport or Driver's License)");
+          if (bidCardItems.length > 0) {
+            const bidNames = bidCardItems.map(b => '\u26A0\uFE0F BID CARD REQUIRED: ' + b.name);
+            docs = [...bidNames, ...docs];
+          }
+          tax = allDocs.filter(d => lo(d.name).includes('sales tax') || lo(d.section).includes('tax') || lo(d.name).includes('resale')).map(d => d.name);
+          forms = allDocs.filter(d => lo(d.name).includes('form') || lo(d.name).includes('affidavit') || lo(d.section).includes('form')).map(d => d.name);
+          notes = [`Verify dealer status with ${item.name} motor vehicle authority.`, "Check sales tax certificate matches company details."];
+        } else if (accType === 'business') {
+          summary = `Business licensing requirements for ${item.name}. ${item.generalReq || ''}`;
+          docs = allDocs.filter(d => lo(d.name).includes('business') || lo(d.name).includes('occupational') || lo(d.name).includes('license') || lo(d.section).includes('business')).map(d => d.name);
+          docs.unshift("Government-issued photo ID (Passport or Driver's License)");
+          tax = allDocs.filter(d => lo(d.name).includes('sales tax') || lo(d.section).includes('tax')).map(d => d.name);
+          notes = ["Confirm active business registration.", "Verify registered agent credentials."];
+        } else if (accType === 'broker') {
+          summary = `Broker requirements for ${item.name}. Non-licensed members can bid via authorized brokers.`;
+          docs = ["Government-issued photo ID (Passport or Driver's License)", "Broker Terms Agreement Signature Page", "Limited Power of Attorney (if bidding via delegate)"];
+          notes = [`Check active brokers in ${item.name}.`];
+        } else if (accType === 'individual') {
+          summary = `Individual buyer requirements for ${item.name}. Restricted salvage inventory access.`;
+          docs = allDocs.filter(d => lo(d.name).includes('photo id') || lo(d.name).includes('driver') || lo(d.name).includes('passport')).map(d => d.name);
+          if (!docs.length) docs = ["Government-issued photo ID (Driver's License or Passport)"];
+          notes = [`Verify individual retail bidding rules in ${item.name}.`];
+        } else {
+          summary = `International member guidelines for bidding in ${item.name}.`;
+          docs = ["Valid passport (signature and photo page)", "Foreign Business Register certificate", "Certified English translations of all documents", "Sales Tax Exemption forms"];
+          notes = ["Cross-reference trade names across registers.", "Ensure translations are notarized."];
+        }
+      } else {
+        summary = `Bidding requirements for buyers in ${item.name}. ${item.generalReq || ''}`;
+        docs = allDocs.map(d => d.name);
+        if (!docs.length) docs = ["Valid passport or national ID", "Foreign Business Registration certificate", "Domestic Tax ID or Sales Tax Certificate"];
+        notes = ["Check passport matches registration.", "Verify trade licenses are active.", "Ensure translations are legible."];
+      }
+      if (!docs.length) docs = allDocs.map(d => d.name).slice(0, 3);
+      if (!docs.length) docs = ["Government-issued photo ID", "Active Business License", "Sales Tax Exemption Certificate"];
+      const uniqueDocs = [...new Set(docs)];
+      docsWithMeta = uniqueDocs.map(docName => {
+        const match = allDocs.find(d => d.name === docName || ('\u26A0\uFE0F BID CARD REQUIRED: ' + d.name) === docName);
+        return { name: docName, issuedBy: match && match.issuedBy && match.issuedBy.trim() ? match.issuedBy.trim() : '' };
+      });
+      return {
+        summary: summary.trim(),
+        docs: uniqueDocs,
+        docsWithMeta,
+        licenses,
+        tax: [...new Set(tax)],
+        forms: [...new Set(forms)],
+        notes,
+        upload: ["Log in to your Copart account.", "Navigate to My Documents.", "Upload clear files in PDF, JPG, or PNG."]
+      };
+    };
+
+    // ─── Data Adapter ───
+    const buildLocations = () => {
+      const list = [];
+      const map = (item, rType) => {
+        const typeKey = { usa:'usa_state', canada:'canada_province', intl:'international_country' }[rType];
+        const country = { usa:'United States', canada:'Canada', intl:item.name }[rType];
+        const code = item.code || (rType === 'canada' ? getProvCode(item.name) : item.name);
+        const id = `${rType}_${code}`;
+        let officialLinks = [];
+        if (rType === 'usa' && USA_LINKS[code]) officialLinks.push({ title: USA_LINKS[code].t, url: USA_LINKS[code].u });
+        else if (rType === 'canada') { const pc = getProvCode(item.name); if (CA_LINKS[pc]) officialLinks.push({ title: CA_LINKS[pc].t, url: CA_LINKS[pc].u }); }
+        return {
+          id, name: item.name, code, regionType: typeKey, country,
+          center: { lat: item.lat || 0, lng: item.lng || 0 },
+          requirements: {
+            business: buildRequirements(item, 'business'),
+            dealer: buildRequirements(item, 'dealer'),
+            broker: buildRequirements(item, 'broker'),
+            individual: buildRequirements(item, 'individual'),
+            international: buildRequirements(item, 'international')
+          },
+          officialLinks,
+          copartLinks: [
+            { title: "Copart Licensing Overview", url: "https://www.copart.com/licensing" },
+            { title: "Upload Documents", url: "https://www.copart.com/uploadDocs" }
+          ],
+          generalReq: item.generalReq || '',
+          raw: item
+        };
+      };
+      (window.USA_DATA || []).forEach(i => list.push(map(i, 'usa')));
+      (window.CANADA_DATA || []).forEach(i => list.push(map(i, 'canada')));
+      (window.INTL_DATA || []).forEach(i => list.push(map(i, 'intl')));
+      return list.sort((a, b) => a.name.localeCompare(b.name));
+    };
+
+    const regionLabel = (t) => ({ usa_state: 'USA State', canada_province: 'Canada Province', international_country: 'International' }[t] || t);
+
+    const INTRO_FACTS = [
+      "161 regions. One platform. Zero guesswork.",
+      "3 million vehicles. 11 countries. Built for the agents who handle it all.",
+      "Founded 1982. Still the world's largest vehicle remarketing platform.",
+      "NASDAQ: CPRT \u2014 but you already knew that.",
+      "From Vallejo, California to the world."
+    ];
+
+    const ARC_HUBS = [
+      { lat: 32.78, lng: -96.80, name: 'Dallas TX' },
+      { lat: 34.05, lng: -118.24, name: 'Los Angeles CA' },
+      { lat: 33.75, lng: -84.39, name: 'Atlanta GA' },
+      { lat: 41.88, lng: -87.63, name: 'Chicago IL' },
+      { lat: 51.51, lng: -0.13, name: 'London UK' },
+      { lat: 25.20, lng: 55.27, name: 'Dubai UAE' },
+      { lat: 43.65, lng: -79.38, name: 'Toronto Canada' },
+      { lat: -33.87, lng: 151.21, name: 'Sydney Australia' }
+    ];
+    const ARC_DATA = [
+      { startLat: 32.78, startLng: -96.80, endLat: 34.05, endLng: -118.24 },
+      { startLat: 32.78, startLng: -96.80, endLat: 33.75, endLng: -84.39 },
+      { startLat: 41.88, startLng: -87.63, endLat: 43.65, endLng: -79.38 },
+      { startLat: 34.05, startLng: -118.24, endLat: 41.88, endLng: -87.63 },
+      { startLat: 51.51, startLng: -0.13, endLat: 25.20, endLng: 55.27 },
+      { startLat: 33.75, startLng: -84.39, endLat: 51.51, endLng: -0.13 },
+      { startLat: 32.78, startLng: -96.80, endLat: 43.65, endLng: -79.38 },
+      { startLat: 25.20, startLng: 55.27, endLat: -33.87, endLng: 151.21 }
+    ];
+
+    // ─── Copart Logo SVG (Premium Oval Wordmark) ───
+    const CopartLogo = ({ height = 28 }) => {
+      const scale = height / 60;
+      return (
+        <svg width={180 * scale} height={60 * scale} viewBox="0 0 180 60" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
+          <defs>
+            <linearGradient id="silverRing" x1="0" y1="0" x2="0" y2="60" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#FFFFFF" />
+              <stop offset="30%" stopColor="#CCCCCC" />
+              <stop offset="70%" stopColor="#888888" />
+              <stop offset="100%" stopColor="#555555" />
+            </linearGradient>
+            <linearGradient id="blueLine" x1="0" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#0a3c75" />
+              <stop offset="50%" stopColor="#0066d4" />
+              <stop offset="100%" stopColor="#0a3c75" />
+            </linearGradient>
+          </defs>
+          <ellipse cx="90" cy="30" rx="84" ry="24" fill="#000000" stroke="url(#silverRing)" strokeWidth="3" />
+          <path d="M 12 33 A 78 18 0 0 0 168 33 A 76 15 0 0 1 12 33 Z" fill="url(#blueLine)" />
+          <text x="88" y="38" fontFamily="'Inter', 'Arial Black', sans-serif" fontWeight="900" fontStyle="italic" fontSize="29" fill="#FFFFFF" stroke="#000000" strokeWidth="3.5" strokeLinejoin="miter" paintOrder="stroke fill" textAnchor="middle" letterSpacing="-1.5">Copart</text>
+          <path d="M 22 24 A 68 12 0 0 1 158 24" stroke="#FFFFFF" strokeWidth="0.5" strokeOpacity="0.4" fill="none" />
+        </svg>
+      );
+    };
+
+    // ─── Intro Overlay ───
+    const IntroOverlay = ({ onDone }) => {
+      const [phase, setPhase] = useState(1);
+      const canvasRef = useRef(null);
+      const particlesRef = useRef([]);
+      const animFrameRef = useRef(null);
+      const dismissed = useRef(false);
+      const [fact] = useState(() => INTRO_FACTS[Math.floor(Math.random() * INTRO_FACTS.length)]);
+      const [sweepProgress, setSweepProgress] = useState(0);
+      const [exiting, setExiting] = useState(false);
+      const overlayRef = useRef(null);
+
+      useEffect(() => {
+        const timers = [];
+        timers.push(setTimeout(() => setPhase(2), 300));
+        timers.push(setTimeout(() => setPhase(3), 1000));
+        timers.push(setTimeout(() => setPhase(4), 1800));
+        timers.push(setTimeout(() => setPhase(5), 2300));
+        timers.push(setTimeout(() => setPhase(6), 2600));
+        return () => timers.forEach(clearTimeout);
+      }, []);
+
+      const triggerExit = useCallback(() => {
+        if (dismissed.current) return;
+        dismissed.current = true;
+        setPhase(7);
+        setExiting(true);
+        if (particlesRef.current) {
+          particlesRef.current.forEach(p => { p.vy = -(2 + Math.random() * 3); });
+        }
+        setTimeout(() => onDone(), 600);
+      }, [onDone]);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => { if (e.key === 'Enter') triggerExit(); };
+        const handleClick = () => triggerExit();
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('click', handleClick);
+        return () => {
+          window.removeEventListener('keydown', handleKeyDown);
+          window.removeEventListener('click', handleClick);
+        };
+      }, [triggerExit]);
+
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        canvas.width = w;
+        canvas.height = h;
+        const particles = [];
+        for (let i = 0; i < 70; i++) {
+          particles.push({
+            x: Math.random() * w, y: Math.random() * h,
+            vx: (Math.random() - 0.3) * 0.3, vy: (Math.random() - 0.3) * 0.2,
+            opacity: 0.15 + Math.random() * 0.25, size: 1.5 + Math.random() * 0.8,
+          });
+        }
+        particlesRef.current = particles;
+        const draw = () => {
+          ctx.clearRect(0, 0, w, h);
+          particles.forEach(p => {
+            p.x += p.vx; p.y += p.vy;
+            if (p.x < 0) p.x = w; if (p.x > w) p.x = 0;
+            if (p.y < 0) p.y = h; if (p.y > h) p.y = 0;
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255,255,255,${p.opacity})`; ctx.fill();
+          });
+          animFrameRef.current = requestAnimationFrame(draw);
+        };
+        draw();
+        return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
+      }, []);
+
+      useEffect(() => {
+        if (phase < 6) return;
+        let start = null; let af = null;
+        const animate = (ts) => {
+          if (!start) start = ts;
+          const pct = Math.min((ts - start) / 700, 1);
+          setSweepProgress(pct);
+          if (pct < 1) af = requestAnimationFrame(animate);
+        };
+        af = requestAnimationFrame(animate);
+        return () => { if (af) cancelAnimationFrame(af); };
+      }, [phase]);
+
+      return (
+        <div ref={overlayRef} style={{
+          position: 'fixed', inset: 0, zIndex: 99999, background: '#020408',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: exiting ? 'none' : 'auto', cursor: 'pointer',
+          willChange: 'clip-path, opacity',
+          animation: exiting ? 'irisOpen 0.6s cubic-bezier(0.76, 0, 0.24, 1) reverse forwards' : 'none',
+        }}>
+          <canvas ref={canvasRef} style={{ position:'absolute', inset:0, zIndex:0 }} />
+          {/* Logo */}
+          <div style={{
+            position: 'relative', zIndex: 1,
+            transform: phase >= 3 ? (exiting ? 'scale(1.06)' : 'scale(1)') : 'scale(0.7)',
+            opacity: phase >= 3 ? (exiting ? 0 : 1) : 0,
+            transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease',
+          }}>
+            <CopartLogo height={56} />
+          </div>
+          {/* Tagline */}
+          <div style={{
+            position: 'relative', zIndex: 1, marginTop: 24, maxWidth: 520, textAlign: 'center',
+            fontSize: 14, fontWeight: 400, color: 'rgba(255,255,255,0.55)',
+            letterSpacing: '0.08em', lineHeight: 1.6, fontFamily: 'var(--font-sans)',
+            opacity: phase >= 4 ? (exiting ? 0 : 1) : 0,
+            transform: phase >= 4 ? 'translateY(0)' : 'translateY(8px)',
+            transition: 'opacity 0.4s ease, transform 0.4s ease',
+          }}>
+            {fact}
+          </div>
+          {/* Credit */}
+          <div style={{
+            position: 'relative', zIndex: 1, marginTop: 20,
+            fontSize: 11, color: 'rgba(255,255,255,0.28)',
+            fontFamily: 'var(--font-mono)', letterSpacing: '0.02em',
+            opacity: phase >= 5 ? (exiting ? 0 : 1) : 0,
+            transition: 'opacity 0.3s ease',
+          }}>
+            This website is designed by Pratham Thakur · Member Services, Copart Hyderabad
+          </div>
+          {/* Enter Button */}
+          {phase >= 6 && (
+            <button onClick={(e) => { e.stopPropagation(); triggerExit(); }} style={{
+              position: 'relative', zIndex: 10, marginTop: 32, padding: '12px 28px',
+              background: 'rgba(34, 211, 238, 0.08)', border: '1px solid var(--accent)',
+              borderRadius: 'var(--radius-button)', color: 'var(--accent)',
+              fontSize: 13, fontWeight: 600, letterSpacing: '0.06em',
+              cursor: 'pointer', transition: 'all 0.18s cubic-bezier(0.22, 1, 0.36, 1)',
+              boxShadow: '0 0 20px rgba(34, 211, 238, 0.15)', animation: 'pulseGlow 2s infinite ease-in-out',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'var(--bg)'; e.currentTarget.style.boxShadow = '0 0 32px rgba(34, 211, 238, 0.45)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(34, 211, 238, 0.08)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 0 20px rgba(34, 211, 238, 0.15)'; }}>
+              Let's Explore Copart Licensing Requirements
+            </button>
+          )}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, height: 1.5, width: `${sweepProgress * 100}%`, background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)', zIndex: 2 }} />
+        </div>
+      );
+    };
+
+    // ─── Sidebar Shimmer ───
+    const SidebarShimmer = () => {
+      const [visible, setVisible] = useState(true);
+      useEffect(() => { const t = setTimeout(() => setVisible(false), 1400); return () => clearTimeout(t); }, []);
+      if (!visible) return null;
+      return (<div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'var(--accent)', zIndex: 5, animation: 'shimmerDown 1.2s ease-out forwards' }} />);
+    };
+
+    // ─── Angular distance filter ───
+    const angularDistance = (lat1, lng1, lat2, lng2) => {
+      const toRad = d => d * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+      return 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 180 / Math.PI;
+    };
+    const filterOverlappingLabels = (labels, minDeg) => {
+      const sorted = [...labels].sort((a, b) => (b.text || '').length - (a.text || '').length);
+      const kept = [];
+      for (const lb of sorted) {
+        let tooClose = false;
+        for (const k of kept) { if (angularDistance(lb.lat, lb.lng, k.lat, k.lng) < minDeg) { tooClose = true; break; } }
+        if (!tooClose) kept.push(lb);
+      }
+      return kept;
+    };
+
+    // ─── Custom Cursor ───
+    const CustomCursor = () => {
+      const [pos, setPos] = useState({ x: 0, y: 0 });
+      const [trail, setTrail] = useState({ x: 0, y: 0 });
+      const [hovered, setHovered] = useState(false);
+      const [visible, setVisible] = useState(false);
+      useEffect(() => {
+        if (window.matchMedia('(pointer: coarse)').matches) return;
+        const onMouseMove = (e) => { setPos({ x: e.clientX, y: e.clientY }); if (!visible) setVisible(true); };
+        const onMouseLeave = () => setVisible(false);
+        const onMouseEnter = () => setVisible(true);
+        window.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseleave', onMouseLeave);
+        document.addEventListener('mouseenter', onMouseEnter);
+        return () => { window.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseleave', onMouseLeave); document.removeEventListener('mouseenter', onMouseEnter); };
+      }, [visible]);
+      useEffect(() => {
+        if (window.matchMedia('(pointer: coarse)').matches) return;
+        let af = null;
+        const tick = () => { setTrail(prev => ({ x: prev.x + (pos.x - prev.x) * 0.16, y: prev.y + (pos.y - prev.y) * 0.16 })); af = requestAnimationFrame(tick); };
+        af = requestAnimationFrame(tick);
+        return () => { if (af) cancelAnimationFrame(af); };
+      }, [pos]);
+      useEffect(() => {
+        if (window.matchMedia('(pointer: coarse)').matches) return;
+        const onHoverStart = () => setHovered(true);
+        const onHoverEnd = () => setHovered(false);
+        const attachListeners = () => {
+          const clickables = document.querySelectorAll('button, a, select, input, tr, [onClick], [role="button"]');
+          clickables.forEach(el => { el.addEventListener('mouseenter', onHoverStart); el.addEventListener('mouseleave', onHoverEnd); });
+        };
+        attachListeners();
+        const observer = new MutationObserver(attachListeners);
+        observer.observe(document.body, { childList: true, subtree: true });
+        return () => observer.disconnect();
+      }, []);
+      if (!visible || window.matchMedia('(pointer: coarse)').matches) return null;
+      return (
+        <>
+          <div style={{ position:'fixed', left:pos.x, top:pos.y, width:6, height:6, background:'var(--accent)', borderRadius:'50%', transform:'translate(-50%,-50%)', pointerEvents:'none', zIndex:999999, boxShadow:'0 0 8px var(--accent)' }} />
+          <div style={{ position:'fixed', left:trail.x, top:trail.y, width:hovered?36:22, height:hovered?36:22, border:hovered?'1.5px solid var(--accent)':'1px solid rgba(34,211,238,0.45)', background:hovered?'rgba(34,211,238,0.05)':'transparent', borderRadius:'50%', transform:'translate(-50%,-50%)', pointerEvents:'none', zIndex:999998, transition:'width 0.18s cubic-bezier(0.25,1,0.5,1), height 0.18s cubic-bezier(0.25,1,0.5,1), border 0.18s ease, background 0.18s ease', boxShadow:hovered?'0 0 16px rgba(34,211,238,0.2)':'none' }} />
+        </>
+      );
+    };
+
+    // ─── Flat Map View ───
+    const FlatMap = ({ polys, selected, selectRegion }) => {
+      const containerRef = useRef(null);
+      const [dims, setDims] = useState({ w: 1200, h: 600 });
+      const [hovIdx, setHovIdx] = useState(null);
+      const [tooltip, setTooltip] = useState(null);
+
+      useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const update = () => setDims({ w: el.clientWidth, h: el.clientHeight });
+        update();
+        window.addEventListener('resize', update);
+        return () => window.removeEventListener('resize', update);
+      }, []);
+
+      const projectPt = useCallback((coord) => {
+        const x = (coord[0] + 180) * (dims.w / 360);
+        const y = (90 - coord[1]) * (dims.h / 180);
+        return [x, y];
+      }, [dims]);
+
+      const ringToSvg = useCallback((ring) => {
+        return ring.map((c, i) => {
+          const [x, y] = projectPt(c);
+          return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ') + 'Z';
+      }, [projectPt]);
+
+      const featureToPath = useCallback((f) => {
+        const g = f.geometry;
+        if (!g) return '';
+        if (g.type === 'Polygon') return g.coordinates.map(r => ringToSvg(r)).join(' ');
+        if (g.type === 'MultiPolygon') return g.coordinates.map(p => p.map(r => ringToSvg(r)).join(' ')).join(' ');
+        return '';
+      }, [ringToSvg]);
+
+      const graticules = useMemo(() => {
+        const lines = [];
+        for (let lat = -60; lat <= 60; lat += 30) {
+          const [x1, y1] = projectPt([-180, lat]);
+          const [x2, y2] = projectPt([180, lat]);
+          lines.push(`M${x1},${y1}L${x2},${y2}`);
+        }
+        for (let lng = -180; lng <= 180; lng += 30) {
+          const [x1, y1] = projectPt([lng, -90]);
+          const [x2, y2] = projectPt([lng, 90]);
+          lines.push(`M${x1},${y1}L${x2},${y2}`);
+        }
+        return lines;
+      }, [projectPt]);
+
+      const paths = useMemo(() => {
+        return polys.map((f, i) => ({ d: featureToPath(f), match: f.properties?.match, polyType: f.properties?._polyType, idx: i }));
+      }, [polys, featureToPath]);
+
+      return (
+        <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', background: 'var(--bg-2)', overflow: 'hidden' }}>
+          <svg width={dims.w} height={dims.h} style={{ display: 'block' }}>
+            {graticules.map((d, i) => (<path key={`g${i}`} d={d} fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.5" />))}
+            {paths.map(p => {
+              if (!p.d) return null;
+              const isSel = selected && p.match && selected.id === p.match.id;
+              const isHov = hovIdx === p.idx;
+              return (
+                <path key={p.idx} d={p.d}
+                  fill={isSel ? 'rgba(34,211,238,0.15)' : isHov && p.match ? 'var(--accent-dim)' : p.match ? 'var(--card)' : 'rgba(255,255,255,0.02)'}
+                  stroke={isSel ? '#22D3EE' : isHov && p.match ? 'rgba(34,211,238,0.5)' : p.match ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)'}
+                  strokeWidth={isSel ? 1.2 : 0.5}
+                  style={{ cursor: p.match ? 'pointer' : 'default', transition: 'fill 0.15s, stroke 0.15s' }}
+                  onMouseEnter={(e) => { setHovIdx(p.idx); if (p.match) setTooltip({ x: e.clientX, y: e.clientY, name: p.match.name, type: regionLabel(p.match.regionType) }); }}
+                  onMouseMove={(e) => { if (p.match) setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null); }}
+                  onMouseLeave={() => { setHovIdx(null); setTooltip(null); }}
+                  onClick={() => { if (p.match) selectRegion(p.match); }}
+                />
+              );
+            })}
+          </svg>
+          {tooltip && (
+            <div style={{ position:'fixed', left:tooltip.x+12, top:tooltip.y-8, zIndex:100, background:'rgba(13,18,32,0.95)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 12px', pointerEvents:'none', boxShadow:'0 8px 32px rgba(0,0,0,0.4)', backdropFilter:'blur(12px)' }}>
+              <div style={{ fontSize:13, fontWeight:500, color:'var(--text-1)' }}>{tooltip.name}</div>
+              <div style={{ fontSize:11, color:'var(--text-3)', marginTop:1 }}>{tooltip.type}</div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // APP
+    // ═══════════════════════════════════════════════════════════════
+    const App = () => {
+      const [view, setView] = useState('globe');
+      const [filter, setFilter] = useState('all');
+      const [query, setQuery] = useState('');
+      const [selId, setSelId] = useState(null);
+      const [accType, setAccType] = useState('dealer');
+      const [toast, setToast] = useState('');
+      const [copiedKey, setCopiedKey] = useState('');
+      const [showIntro, setShowIntro] = useState(true);
+      const globeContainerRef = useRef(null);
+      const globeRef = useRef(null);
+      const searchRef = useRef(null);
+      const [polys, setPolys] = useState([]);
+
+      const allLocs = useMemo(buildLocations, []);
+
+      useEffect(() => {
+        const u = allLocs.filter(l => l.regionType === 'usa_state').length;
+        const c = allLocs.filter(l => l.regionType === 'canada_province').length;
+        const i = allLocs.filter(l => l.regionType === 'international_country').length;
+        console.log(`%cCopart Licensing Database: ${allLocs.length} regions (${u} USA, ${c} Canada, ${i} International)`, 'color:#22D3EE;font-weight:600');
+      }, [allLocs]);
+
+      const selected = useMemo(() => selId ? allLocs.find(l => l.id === selId) || null : null, [allLocs, selId]);
+
+      const filtered = useMemo(() => {
+        let r = allLocs;
+        if (filter !== 'all') r = r.filter(l => l.regionType === filter);
+        const q = query.toLowerCase().trim();
+        if (q) r = r.filter(l => l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q));
+        return r;
+      }, [allLocs, filter, query]);
+
+      const tabCounts = useMemo(() => ({
+        all: allLocs.length,
+        usa_state: allLocs.filter(l => l.regionType === 'usa_state').length,
+        canada_province: allLocs.filter(l => l.regionType === 'canada_province').length,
+        international_country: allLocs.filter(l => l.regionType === 'international_country').length,
+      }), [allLocs]);
+
+      const notify = useCallback((msg, key = '') => {
+        setToast(msg); setCopiedKey(key);
+        setTimeout(() => { setToast(''); setCopiedKey(''); }, 1800);
+      }, []);
+
+      const selectRegion = useCallback((loc) => {
+        if (!loc) return;
+        setSelId(loc.id);
+        if (view === 'globe' && globeRef.current && loc.center.lat !== 0) {
+          globeRef.current.controls().autoRotate = false;
+          globeRef.current.pointOfView({ lat: loc.center.lat, lng: loc.center.lng, altitude: 1.2 }, 1400);
+        }
+      }, [view]);
+
+      useEffect(() => {
+        const handler = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchRef.current?.focus(); } };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+      }, []);
+
+      // ─── GeoJSON ───
+      useEffect(() => {
+        Promise.all([
+          fetch('https://unpkg.com/three-globe/example/data/ne_110m_admin_0_countries.geojson').then(r => r.json()),
+          fetch('https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/united-states.geojson').then(r => r.json()),
+          fetch('https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/canada.geojson').then(r => r.json())
+        ]).then(([world, us, ca]) => {
+          const norm = n => n.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const worldF = world.features.filter(f => {
+            const n = f.properties.name || f.properties.ADMIN || '';
+            return !n.includes('United States') && !n.includes('America') && n !== 'Canada';
+          }).map(f => {
+            const n = f.properties.name || f.properties.ADMIN || '';
+            return { ...f, properties: { ...f.properties, name: n, _polyType: 'world', match: allLocs.find(l => l.regionType === 'international_country' && norm(l.name) === norm(n)) } };
+          });
+          const usF = us.features.map(f => ({ ...f, properties: { ...f.properties, _polyType: 'us', match: allLocs.find(l => l.regionType === 'usa_state' && norm(l.name) === norm(f.properties.name)) } }));
+          const caF = ca.features.map(f => ({ ...f, properties: { ...f.properties, _polyType: 'ca', match: allLocs.find(l => l.regionType === 'canada_province' && norm(l.name) === norm(f.properties.name)) } }));
+          setPolys([...worldF, ...usF, ...caF]);
+        }).catch(console.error);
+      }, [allLocs]);
+
+      // ─── Globe Init ───
+      useEffect(() => {
+        if (view !== 'globe' || !globeContainerRef.current) return;
+        const el = globeContainerRef.current;
+        const g = window.Globe()(el)
+          .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+          .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+          .backgroundImageUrl('')
+          .showAtmosphere(true)
+          .atmosphereColor('rgba(34,211,238,0.28)')
+          .atmosphereAltitude(0.15)
+          .showGraticules(true)
+          .width(el.clientWidth)
+          .height(el.clientHeight);
+
+        globeRef.current = g;
+
+        const mat = g.globeMaterial();
+        mat.bumpScale = 10;
+        mat.shininess = 3;
+        mat.specular = new window.THREE.Color('#081820');
+        mat.emissive = new window.THREE.Color('#000000');
+        mat.emissiveIntensity = 0;
+
+        new window.THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-water.png', tex => { mat.specularMap = tex; });
+
+        setTimeout(() => {
+          g.lights().forEach(l => {
+            if (l.type === 'DirectionalLight') { l.position.set(1.5, 2, 1); l.intensity = 1.4; }
+            else if (l.type === 'AmbientLight') { l.intensity = 0.65; }
+          });
+          const fillLight = new window.THREE.DirectionalLight('#22D3EE', 0.25);
+          fillLight.position.set(-2, -1, -1);
+          g.scene().add(fillLight);
+
+          // Style graticules
+          const gratMat = g.scene().children.find(c => c.type === 'Line');
+          if (gratMat && gratMat.material) {
+            gratMat.material.color = new window.THREE.Color('rgba(255,255,255,0.04)');
+            gratMat.material.opacity = 0.04;
+            gratMat.material.transparent = true;
+          }
+        }, 100);
+
+        g.controls().autoRotate = true;
+        g.controls().autoRotateSpeed = 0.25;
+        g.controls().enableZoom = true;
+        g.controls().enableDamping = true;
+        g.controls().dampingFactor = 0.12;
+        g.controls().addEventListener('start', () => { g.controls().autoRotate = false; });
+
+        g.arcsData(ARC_DATA)
+          .arcColor(() => 'rgba(34,211,238,0.18)')
+          .arcStroke(0.4)
+          .arcAltitudeAutoScale(0.25)
+          .arcDashLength(0.3)
+          .arcDashGap(0.7)
+          .arcDashAnimateTime(6000);
+
+        const onResize = () => { if (el && g) { g.width(el.clientWidth); g.height(el.clientHeight); } };
+        window.addEventListener('resize', onResize);
+        return () => { window.removeEventListener('resize', onResize); if (el) el.innerHTML = ''; };
+      }, [view]);
+
+      // ─── Polygon Layer ───
+      useEffect(() => {
+        const g = globeRef.current;
+        if (!g || !polys.length || view !== 'globe') return;
+        g.polygonsData(polys)
+          .polygonCapColor(d => {
+            if (selected && d.properties.match && selected.id === d.properties.match.id) return 'rgba(34,211,238,0.08)';
+            return 'rgba(0,0,0,0)';
+          })
+          .polygonStrokeColor(d => {
+            const pt = d.properties._polyType;
+            if (selected && d.properties.match && selected.id === d.properties.match.id) return '#22D3EE';
+            if (pt === 'us') return 'rgba(34, 211, 238, 0.45)';
+            if (pt === 'ca') return 'rgba(34, 211, 238, 0.40)';
+            if (d.properties.match) return 'rgba(148, 220, 255, 0.45)';
+            return 'rgba(255,255,255,0.08)';
+          })
+          .polygonStrokeWidth(d => {
+            if (selected && d.properties.match && selected.id === d.properties.match.id) return 1.4;
+            return d.properties._polyType === 'us' ? 0.5 : 0.4;
+          })
+          .polygonSideColor(() => 'rgba(0,0,0,0)')
+          .polygonAltitude(d => {
+            if (selected && d.properties.match && selected.id === d.properties.match.id) return 0.012;
+            return 0.001;
+          })
+          .polygonLabel(d => {
+            if (!d.properties.match) return null;
+            const m = d.properties.match;
+            return `<div class="globe-tooltip"><div>${m.name}</div><div class="tt-type">${regionLabel(m.regionType)}</div></div>`;
+          })
+          .onPolygonClick(p => { if (p.properties.match) selectRegion(p.properties.match); })
+          .onPolygonHover(p => {
+            if (p && p.properties.match) {
+              g.polygonCapColor(d => {
+                if (selected && d.properties.match && selected.id === d.properties.match.id) return 'rgba(34,211,238,0.08)';
+                if (d === p && d.properties.match) return 'rgba(34,211,238,0.06)';
+                return 'rgba(0,0,0,0)';
+              });
+            } else {
+              g.polygonCapColor(d => {
+                if (selected && d.properties.match && selected.id === d.properties.match.id) return 'rgba(34,211,238,0.08)';
+                return 'rgba(0,0,0,0)';
+              });
+            }
+          });
+      }, [polys, selected, view, selectRegion]);
+
+      // ─── Selected Point Marker + Rings ───
+      useEffect(() => {
+        const g = globeRef.current;
+        if (!g || view !== 'globe') return;
+        if (selected && selected.center && selected.center.lat !== 0) {
+          g.ringsData([{ lat: selected.center.lat, lng: selected.center.lng }])
+           .ringColor(() => 'rgba(34, 211, 238, 0.85)')
+           .ringMaxRadius(3)
+           .ringPropagationSpeed(2.5);
+          g.pointsData([{ lat: selected.center.lat, lng: selected.center.lng }])
+           .pointColor(() => '#22D3EE')
+           .pointAltitude(0.02)
+           .pointRadius(0.4)
+           .pointsMerge(false);
+        } else {
+          g.ringsData([]);
+          g.pointsData([]);
+        }
+      }, [selected, view]);
+
+      // ─── Label Layer ───
+      useEffect(() => {
+        const g = globeRef.current;
+        if (!g || view !== 'globe') return;
+        const pov = g.pointOfView();
+        const altitude = pov ? pov.altitude : 2.5;
+        const rawLabels = filtered.filter(l => l.center.lat !== 0).map(l => {
+          const isIntl = l.regionType === 'international_country';
+          if (isIntl && altitude > 2.5) return null;
+          return {
+            lat: l.center.lat, lng: l.center.lng,
+            text: l.regionType === 'usa_state' ? l.code : l.regionType === 'canada_province' ? getProvCode(l.name) : l.name,
+            color: 'rgba(255,255,255,0.8)',
+            size: l.regionType === 'usa_state' ? 0.72 : l.regionType === 'canada_province' ? 0.68 : 0.42,
+            loc: l
+          };
+        }).filter(Boolean);
+        const labels = filterOverlappingLabels(rawLabels, 3.5);
+        g.labelsData(labels)
+          .labelLat('lat').labelLng('lng').labelText('text')
+          .labelColor('color').labelSize('size')
+          .labelDotRadius(0).labelAltitude(0.018).labelResolution(4)
+          .onLabelClick(lb => { if (lb.loc) selectRegion(lb.loc); });
+      }, [filtered, view, selectRegion]);
+
+      // ─── Tabs ───
+      const tabs = [
+        { id: 'all', label: 'All' },
+        { id: 'usa_state', label: 'USA' },
+        { id: 'canada_province', label: 'Canada' },
+        { id: 'international_country', label: "Int'l" }
+      ];
+
+      const viewModes = [
+        { id: 'globe', label: 'Globe', I: Globe2 },
+        { id: 'list', label: 'List', I: List }
+      ];
+
+      // ─── Sidebar List (shared between globe, map, list views) ───
+      const SidebarList = ({ width = 340, showSearch = true }) => (
+        <div style={{ width, height:'100%', flexShrink:0, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative', background: view === 'list' ? 'var(--surface)' : 'transparent', borderRight: view === 'list' ? '1px solid var(--border)' : 'none' }}>
+          <SidebarShimmer />
+          <div style={{ padding:'16px 20px 12px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+              <span style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--text-3)' }}>Region Explorer</span>
+              <span style={{ fontSize:10, fontWeight:500, color:'var(--text-3)', background:'var(--card)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-pill)', padding:'2px 7px' }}>{filtered.length}</span>
+            </div>
+            {showSearch && (
+              <div style={{ position:'relative' }}>
+                <Search style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', width:13, height:13, color:'var(--text-3)' }} />
+                <input type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter regions..."
+                  style={{ width:'100%', background:'var(--card)', border:'1px solid var(--border)', borderRadius:'var(--radius-input)', padding:'8px 12px 8px 32px', fontSize:12, fontWeight:500, color:'var(--text-1)', outline:'none', transition:'all 0.18s ease', fontFamily:'var(--font-sans)' }}
+                  onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px var(--accent-glow)'; }}
+                  onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }}
+                />
+              </div>
+            )}
+          </div>
+          {/* Filter tabs */}
+          <div style={{ padding:'6px 16px', borderBottom:'1px solid var(--border)', display:'flex', gap:4, flexShrink:0 }}>
+            {tabs.map(t => {
+              const isActive = filter === t.id;
+              return (
+                <button key={t.id} onClick={() => setFilter(t.id)}
+                  style={{ flex:1, padding:'6px 8px', borderRadius:6, fontSize:12, fontWeight:500, border: isActive ? '1px solid rgba(34,211,238,0.2)' : '1px solid transparent', cursor:'pointer', transition:'all 0.18s cubic-bezier(0.22,1,0.36,1)', background: isActive ? 'var(--accent-dim)' : 'transparent', color: isActive ? 'var(--accent)' : 'var(--text-3)', display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+                  {t.label}
+                  <span style={{ fontSize:10, color: isActive ? 'var(--accent)' : 'var(--text-4)', fontWeight:400 }}>({tabCounts[t.id]})</span>
+                </button>
+              );
+            })}
+          </div>
+          {/* Region list */}
+          <div style={{ flex:1, overflowY:'auto', padding:'8px 8px' }}>
+            {filtered.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'48px 20px', color:'var(--text-3)', fontSize:13, fontWeight:500, lineHeight:1.5 }}>
+                No regions found.<br/>Try a state, province, or country name.
+              </div>
+            ) : filtered.map((loc, idx) => {
+              const isSel = selId === loc.id;
+              const delay = Math.min(idx * 18, 320);
+              return (
+                <div key={loc.id} onClick={() => selectRegion(loc)}
+                  style={{
+                    padding: isSel ? '10px 16px 10px 20px' : '10px 16px',
+                    borderRadius: 10, display:'flex', alignItems:'center', justifyContent:'space-between',
+                    cursor:'pointer', transition:'all 0.18s cubic-bezier(0.22,1,0.36,1)', marginBottom:2,
+                    background: isSel ? 'var(--card-active)' : 'transparent',
+                    borderLeft: isSel ? '3px solid var(--accent)' : '3px solid transparent',
+                    animation: `fade-in 0.3s ease ${delay}ms both`,
+                  }}
+                  onMouseEnter={e => { if (!isSel) { e.currentTarget.style.background='var(--card-hover)'; e.currentTarget.style.paddingLeft='20px'; e.currentTarget.style.borderLeft='3px solid var(--accent)'; }}}
+                  onMouseLeave={e => { if (!isSel) { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='16px'; e.currentTarget.style.borderLeft='3px solid transparent'; }}}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <FlagDisplay loc={loc} size={16} />
+                    <div>
+                      <div style={{ fontSize:13, fontWeight: isSel ? 600 : 500, color: isSel ? 'var(--accent)' : 'var(--text-1)', lineHeight:1.3 }}>{loc.name}</div>
+                      <div style={{ fontSize:11, color:'var(--text-3)', marginTop:1, fontWeight:400 }}>{regionLabel(loc.regionType)}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    {isSel && <span style={{ width:5, height:5, borderRadius:'50%', background:'var(--accent)', boxShadow:'0 0 8px var(--accent)' }} />}
+                    <ChevronRight style={{ width:12, height:12, color: isSel ? 'var(--accent)' : 'var(--text-4)', transition:'all 0.15s', opacity: isSel ? 1 : 0.5, flexShrink:0 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+
+      // ─── Render ───
+      return (
+        <>
+        <CustomCursor />
+        {showIntro && <IntroOverlay onDone={() => setShowIntro(false)} />}
+        <div style={{ flex:1, width:'100%', height:'100%', display:'flex', flexDirection:'column', position:'relative', fontFamily:'var(--font-sans)' }}>
+
+          {/* Toast */}
+          <AnimatePresence>
+            {toast && (
+              <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:16 }} transition={spring}
+                style={{ position:'fixed', bottom:32, left:'50%', transform:'translateX(-50%)', zIndex:999, background:'rgba(13,18,32,0.95)', border:'1px solid rgba(34,211,238,0.25)', borderRadius:'var(--radius-pill)', padding:'10px 20px', display:'flex', alignItems:'center', gap:8, boxShadow:'0 16px 48px rgba(0,0,0,0.4)', backdropFilter:'blur(16px)' }}>
+                <Check style={{ width:14, height:14, color:'var(--success)', strokeWidth:3 }} />
+                <span style={{ fontSize:13, fontWeight:500, color:'var(--text-1)' }}>{toast}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ═══ Navbar ═══ */}
+          <header style={{ height:56, flexShrink:0, zIndex:30, padding:'0 24px', borderBottom:'1px solid var(--border)', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:16 }}>
+            {/* Left: Logo + Label */}
+            <div style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', flexShrink:0 }} onClick={() => { setView('globe'); setSelId(null); }}>
+              <CopartLogo height={28} />
+              <div style={{ width:1, height:20, background:'var(--border-strong)' }} />
+              <span style={{ fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:'0.08em', color:'var(--text-3)', textTransform:'uppercase', fontWeight:500 }}>Licensing Intelligence</span>
+            </div>
+
+            {/* Center: Search */}
+            <div style={{ position:'relative', width:'100%', maxWidth:480, flexShrink:1 }}>
+              <Search style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', width:14, height:14, color:'var(--text-3)' }} />
+              <input ref={searchRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
+                placeholder={`Search ${allLocs.length} regions...`}
+                style={{ width:'100%', background:'var(--card)', border:'1px solid var(--border)', borderRadius:'var(--radius-input)', padding:'10px 16px 10px 40px', fontSize:13, fontWeight:500, color:'var(--text-1)', outline:'none', transition:'all 0.18s ease', fontFamily:'var(--font-sans)' }}
+                onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px var(--accent-glow)'; }}
+                onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }}
+              />
+              <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:10, color:'var(--text-4)', fontWeight:500, pointerEvents:'none', border:'1px solid var(--border-strong)', borderRadius:4, padding:'2px 6px', background:'var(--card)', fontFamily:'var(--font-mono)' }}>Ctrl K</span>
+            </div>
+
+            {/* Right: View Toggle + Counter */}
+            <div style={{ display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
+              <div style={{ display:'flex', alignItems:'center', border:'1px solid var(--border-strong)', borderRadius:8, overflow:'hidden' }}>
+                {viewModes.map((t, i) => (
+                  <React.Fragment key={t.id}>
+                    {i > 0 && <div style={{ width:1, height:20, background:'var(--border-strong)' }} />}
+                    <button onClick={() => setView(t.id)}
+                      onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
+                      onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                      style={{ padding:'7px 12px', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:5, border:'none', cursor:'pointer', transition:'all 0.18s ease', background: view === t.id ? 'var(--accent-dim)' : 'transparent', color: view === t.id ? 'var(--accent)' : 'var(--text-3)' }}>
+                      <t.I style={{ width:13, height:13 }} /> {t.label}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+              <span style={{ fontSize:11, color:'var(--text-3)', fontFamily:'var(--font-mono)', fontWeight:500, whiteSpace:'nowrap' }}>{allLocs.length} regions</span>
+            </div>
+          </header>
+
+          {/* ═══ Main Area ═══ */}
+          <div style={{ flex:1, width:'100%', position:'relative', overflow:'hidden' }}>
+
+            {/* ─── Globe View ─── */}
+            {view === 'globe' && (
+              <div style={{ width:'100%', height:'100%', position:'relative', display:'flex' }}>
+                <div ref={globeContainerRef} style={{ position:'absolute', inset:0, zIndex:0, cursor:'grab' }} />
+                {/* Left Explorer Panel */}
+                <div className="panel" style={{ position:'absolute', left:24, top:24, bottom:24, width:340, zIndex:10, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+                  <SidebarList width={340} />
+                </div>
+                {/* Right Detail Panel */}
+                <div className="panel" style={{ position:'absolute', right:24, top:24, bottom:24, width:440, zIndex:10, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+                  {selected ? (
+                    <DetailPanel loc={selected} accType={accType} setAccType={setAccType} notify={notify} copiedKey={copiedKey} onClose={() => setSelId(null)} />
+                  ) : (
+                    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40, textAlign:'center' }}>
+                      <Compass style={{ width:28, height:28, color:'var(--text-4)', marginBottom:14 }} />
+                      <div style={{ fontSize:15, fontWeight:600, color:'var(--text-2)' }}>No Region Selected</div>
+                      <div style={{ fontSize:13, color:'var(--text-3)', marginTop:8, maxWidth:240, lineHeight:1.55, fontWeight:400 }}>Select a region to view licensing requirements.</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+
+            {/* ─── List View ─── */}
+            {view === 'list' && (
+              <div style={{ width:'100%', height:'100%', display:'flex', overflow:'hidden' }}>
+                {/* Sidebar */}
+                <div style={{ width:320, height:'100%', flexShrink:0, borderRight:'1px solid var(--border)', background:'var(--surface)', backdropFilter:'blur(28px)', display:'flex', flexDirection:'column', position:'relative' }}>
+                  <SidebarList width={320} showSearch={true} />
+                </div>
+                {/* Table */}
+                <div style={{ flex:1, height:'100%', overflow:'hidden', display:'flex', flexDirection:'column', padding:24 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, flexShrink:0 }}>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--text-3)', marginBottom:4 }}>Database</div>
+                      <div style={{ fontSize:18, fontWeight:600, color:'var(--text-1)', letterSpacing:'-0.01em' }}>Licensing Registry</div>
+                    </div>
+                    <span style={{ fontSize:13, color:'var(--text-3)', fontWeight:500 }}>{filtered.length} jurisdictions</span>
+                  </div>
+                  <div style={{ flex:1, overflow:'auto', borderRadius:'var(--radius-panel)', border:'1px solid var(--border)', background:'rgba(13,18,32,0.3)' }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse', textAlign:'left', fontSize:13 }}>
+                      <thead>
+                        <tr style={{ borderBottom:'1px solid var(--border)', position:'sticky', top:0, background:'rgba(13,18,32,0.98)', zIndex:2 }}>
+                          {['Region','Type','Country','Docs','Updated',''].map((h, i) => (
+                            <th key={i} style={{ padding:'14px 20px', fontSize:11, fontWeight:600, color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'0.06em' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(r => {
+                          const dc = (r.raw.requirements || []).reduce((acc, sec) => acc + (sec.items || []).length, 0);
+                          return (
+                            <tr key={r.id} onClick={() => selectRegion(r)}
+                              style={{ borderBottom:'1px solid var(--border)', cursor:'pointer', transition:'background 0.15s ease' }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'var(--card-hover)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                              <td style={{ padding:'12px 20px', fontWeight:600, color:'var(--text-1)' }}>{r.name}</td>
+                              <td style={{ padding:'12px 20px', fontSize:11, fontWeight:600, color:'var(--accent)', textTransform:'uppercase', letterSpacing:'0.03em' }}>{regionLabel(r.regionType)}</td>
+                              <td style={{ padding:'12px 20px', color:'var(--text-2)' }}>{r.country}</td>
+                              <td style={{ padding:'12px 20px', color:'var(--text-2)', fontFamily:'var(--font-mono)' }}>{dc}</td>
+                              <td style={{ padding:'12px 20px', color:'var(--text-3)', fontSize:12 }}>May 2026</td>
+                              <td style={{ padding:'12px 20px', textAlign:'right' }}>
+                                <button onClick={e => { e.stopPropagation(); selectRegion(r); }}
+                                  style={{ padding:'6px 16px', background:'var(--accent-dim)', border:'1px solid rgba(34,211,238,0.15)', borderRadius:'var(--radius-pill)', fontSize:12, fontWeight:600, color:'var(--accent)', cursor:'pointer', transition:'all 0.18s ease' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'var(--bg)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent-dim)'; e.currentTarget.style.color = 'var(--accent)'; }}>
+                                  View
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                {/* Right Detail */}
+                <div style={{ width:420, height:'100%', flexShrink:0, borderLeft:'1px solid var(--border)', background:'rgba(8,12,20,0.9)', backdropFilter:'blur(20px)', display:'flex', flexDirection:'column' }}>
+                  {selected ? (
+                    <DetailPanel loc={selected} accType={accType} setAccType={setAccType} notify={notify} copiedKey={copiedKey} onClose={() => setSelId(null)} />
+                  ) : (
+                    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40, textAlign:'center' }}>
+                      <Compass style={{ width:28, height:28, color:'var(--text-4)', marginBottom:14 }} />
+                      <div style={{ fontSize:15, fontWeight:600, color:'var(--text-2)' }}>No Region Selected</div>
+                      <div style={{ fontSize:13, color:'var(--text-3)', marginTop:8, maxWidth:240, lineHeight:1.55 }}>Select a region to view licensing requirements.</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <footer style={{ height:36, flexShrink:0, zIndex:30, borderTop:'1px solid var(--border)', background:'var(--bg)', padding:'0 24px', display:'flex', alignItems:'center', justifyContent:'space-between', fontSize:11, color:'var(--text-4)', fontWeight:500, letterSpacing:'0.02em' }}>
+            <span>Copart Member Services · Licensing Intelligence Platform</span>
+            <span>Built by Pratham Thakur · Hyderabad · © 2026 Copart Inc.</span>
+          </footer>
+        </div>
+        </>
+      );
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // DETAIL PANEL
+    // ═══════════════════════════════════════════════════════════════
+    const DetailPanel = ({ loc, accType, setAccType, notify, copiedKey, onClose }) => {
+      const rawText = useMemo(() => generateRawResponse(loc), [loc]);
+
+      const hasChecklists = loc.raw && loc.raw.checklist && (
+        (loc.raw.checklist.existing && loc.raw.checklist.existing.length > 0) ||
+        (loc.raw.checklist.dealers && loc.raw.checklist.dealers.length > 0) ||
+        (loc.raw.checklist.nonDealers && loc.raw.checklist.nonDealers.length > 0)
+      );
+
+      const hasPermittedRoles = loc.raw && loc.raw.permittedRoles && (
+        (loc.raw.permittedRoles.acceptable && loc.raw.permittedRoles.acceptable.length > 0) ||
+        (loc.raw.permittedRoles.unacceptable && loc.raw.permittedRoles.unacceptable.length > 0)
+      );
+
+      // Bid Card detection
+      const bidCardItem = useMemo(() => {
+        if (!loc.raw || !loc.raw.requirements) return null;
+        for (const sec of loc.raw.requirements) {
+          if ((sec.section || '').toLowerCase().includes('general requirements')) {
+            for (const it of (sec.items || [])) {
+              if ((it.name || '').toLowerCase().includes('bid card')) {
+                return it;
+              }
+            }
+          }
+        }
+        return null;
+      }, [loc]);
+
+      const copyResponse = () => {
+        navigator.clipboard.writeText(rawText).then(() => notify('Copy paste data copied', 'response'));
+      };
+
+      const copyDocs = () => {
+        let t = `${loc.name} Licensing Requirements:\n\n`;
+        if (loc.raw && loc.raw.requirements) {
+          loc.raw.requirements.forEach(sec => {
+            t += `${sec.section}:\n`;
+            (sec.items || []).forEach(it => {
+              t += `- ${it.name}`;
+              if (it.description && it.description.trim()) t += ` (${it.description.trim()})`;
+              t += '\n';
+            });
+            t += '\n';
+          });
+        }
+        navigator.clipboard.writeText(t).then(() => notify('Requirements copied', 'docs'));
+      };
+
+      const copyLinks = () => {
+        let t = '';
+        if (loc.officialLinks && loc.officialLinks.length) {
+          t += `Official Links for ${loc.name}:\n`;
+          loc.officialLinks.forEach(l => t += `- ${l.title}: ${l.url}\n`);
+        } else {
+          t += 'Official authority links not available in the dataset.\n';
+        }
+        t += '\nCopart Resources:\n';
+        loc.copartLinks.forEach(l => t += `- ${l.title}: ${l.url}\n`);
+        navigator.clipboard.writeText(t).then(() => notify('Links copied', 'links'));
+      };
+
+      const downloadPdf = () => {
+        const w = window.open('', '_blank');
+        let reqsHtml = '';
+        if (loc.raw && loc.raw.requirements) {
+          loc.raw.requirements.forEach(sec => {
+            reqsHtml += `<h2>${sec.section}</h2><ul>`;
+            (sec.items || []).forEach(it => {
+              reqsHtml += `<li><strong>${it.name}</strong>`;
+              if (it.description && it.description.trim()) reqsHtml += `<br/><span style="color:#475569;font-size:13px">${it.description}</span>`;
+              if (it.issuedBy && it.issuedBy.trim()) reqsHtml += `<br/><span style="color:#64748b;font-size:11px">Authority: ${it.issuedBy}</span>`;
+              reqsHtml += `</li>`;
+            });
+            reqsHtml += `</ul>`;
+          });
+        }
+        let checklistHtml = '';
+        if (hasChecklists) {
+          checklistHtml += `<h2>Required Documents Checklist</h2>`;
+          if (loc.raw.checklist.existing && loc.raw.checklist.existing.length > 0) checklistHtml += `<h3>Existing Members</h3><ul>` + loc.raw.checklist.existing.map(item => `<li>${item}</li>`).join('') + `</ul>`;
+          if (loc.raw.checklist.dealers && loc.raw.checklist.dealers.length > 0) checklistHtml += `<h3>Dealers</h3><ul>` + loc.raw.checklist.dealers.map(item => `<li>${item}</li>`).join('') + `</ul>`;
+          if (loc.raw.checklist.nonDealers && loc.raw.checklist.nonDealers.length > 0) checklistHtml += `<h3>Non-Dealers</h3><ul>` + loc.raw.checklist.nonDealers.map(item => `<li>${item}</li>`).join('') + `</ul>`;
+        }
+        w.document.write(`<html><head><title>${loc.name} - Copart Licensing</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:48px;color:#1e293b;line-height:1.6;max-width:720px}h1{font-size:22px;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:12px;font-weight:600}h2{font-size:14px;color:#334155;margin-top:28px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #f1f5f9;padding-bottom:6px;font-weight:600}h3{font-size:12px;color:#475569;margin-top:16px;text-transform:uppercase}ul{padding-left:20px}li{margin-bottom:8px;font-size:13px;color:#334155}.meta{font-size:12px;color:#64748b;margin-bottom:28px}.summary{background:#f8fafc;border-left:3px solid #22D3EE;padding:14px 16px;font-size:13px;color:#475569;margin-bottom:24px;border-radius:0 8px 8px 0}.footer{margin-top:40px;font-size:11px;color:#94a3b8;text-align:center;border-top:1px solid #f1f5f9;padding-top:16px}</style></head><body><h1>${loc.name} Licensing Requirements</h1><div class="meta">${loc.country} · ${regionLabel(loc.regionType)}</div><div class="summary">${loc.generalReq || ''}</div>${reqsHtml}${checklistHtml}<h2>Official Resources</h2><ul>${loc.officialLinks && loc.officialLinks.length?loc.officialLinks.map(l=>`<li><a href="${l.url}">${l.title}</a></li>`).join(''):'<li>Not available in dataset</li>'}</ul><div class="footer">Copart compliance document. Verify before activation.</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},600)}<\/script></body></html>`);
+        w.document.close();
+        notify('PDF print triggered');
+      };
+
+      return (
+        <motion.div
+          initial={{ x: 32, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30, duration: 0.3 }}
+          style={{ flex:1, display:'flex', flexDirection:'column', height:'100%', overflow:'hidden' }}>
+
+          {/* Header */}
+          <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+            <div style={{ borderLeft:'3px solid var(--accent)', paddingLeft:12, display:'flex', alignItems:'center', gap:10 }}>
+              <FlagDisplay loc={loc} size={22} />
+              <div>
+                <div style={{ fontSize:20, fontWeight:600, color:'var(--text-1)', lineHeight:1.3, letterSpacing:'-0.01em' }}>{loc.name}</div>
+                <div style={{ fontSize:11, color:'var(--text-3)', marginTop:2, fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase' }}>{loc.country} · {regionLabel(loc.regionType)}</div>
+              </div>
+            </div>
+            <button onClick={onClose}
+              style={{ width:28, height:28, borderRadius:8, background:'var(--card)', border:'1px solid var(--border)', cursor:'pointer', color:'var(--text-3)', transition:'all 0.18s ease', display:'flex', alignItems:'center', justifyContent:'center' }}
+              onMouseEnter={e => { e.currentTarget.style.background='var(--card-hover)'; e.currentTarget.style.color='var(--text-1)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background='var(--card)'; e.currentTarget.style.color='var(--text-3)'; }}>
+              <X style={{ width:14, height:14 }} />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+
+              {/* Bid Card Warning */}
+              {bidCardItem && (
+                <div style={{ background:'var(--warning-dim)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'var(--radius-card)', padding:'12px 16px', display:'flex', gap:12, alignItems:'flex-start' }}>
+                  <AlertTriangle style={{ width:16, height:16, color:'var(--warning)', flexShrink:0, marginTop:1 }} />
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:600, color:'var(--warning)' }}>Bid Card Required</div>
+                    {bidCardItem.issuedBy && bidCardItem.issuedBy.trim() && (
+                      <div style={{ fontSize:11, color:'var(--text-2)', marginTop:2 }}>{bidCardItem.issuedBy}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Account Type Selector */}
+              <div>
+                <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--text-3)', marginBottom:8 }}>Account Type</div>
+                <select value={accType} onChange={e => setAccType(e.target.value)}
+                  style={{ width:'100%', background:'#0d1220', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-button)', fontSize:13, padding:'8px 12px', color:'var(--text-1)', fontFamily:'var(--font-sans)', outline:'none', transition:'all 0.18s ease', cursor:'pointer', colorScheme:'dark', WebkitAppearance:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 12px center', paddingRight:32 }}
+                  onFocus={e => { e.target.style.borderColor='var(--accent)'; e.target.style.boxShadow='0 0 0 3px var(--accent-glow)'; }}
+                  onBlur={e => { e.target.style.borderColor='var(--border-strong)'; e.target.style.boxShadow='none'; }}>
+                  <option value="dealer" style={{background:'#0d1220',color:'#F1F5F9'}}>Dealer</option>
+                  <option value="business" style={{background:'#0d1220',color:'#F1F5F9'}}>Business</option>
+                  <option value="individual" style={{background:'#0d1220',color:'#F1F5F9'}}>Individual</option>
+                  <option value="broker" style={{background:'#0d1220',color:'#F1F5F9'}}>Broker</option>
+                  <option value="international" style={{background:'#0d1220',color:'#F1F5F9'}}>International</option>
+                </select>
+              </div>
+
+              {/* General Requirements */}
+              {loc.generalReq && (
+                <div style={{ background:'var(--card)', borderRadius:'var(--radius-card)', padding:'12px 14px', border:'1px solid var(--border)' }}>
+                  <div style={{ fontSize:13, color:'var(--text-2)', lineHeight:1.55, fontWeight:400 }}>{loc.generalReq}</div>
+                </div>
+              )}
+
+              {/* Raw Requirements Sections */}
+              {loc.raw && loc.raw.requirements && loc.raw.requirements.map((sec, secIdx) => (
+                <Section key={secIdx} title={sec.section}>
+                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    {(sec.items || []).map((it, itemIdx) => (
+                      <div key={itemIdx}
+                        style={{ display:'flex', gap:12, padding:'10px 14px', background:'var(--card)', borderRadius:'var(--radius-card)', border:'1px solid var(--border)', alignItems:'flex-start', transition:'all 0.18s cubic-bezier(0.22,1,0.36,1)' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor='var(--border-strong)'; e.currentTarget.style.background='var(--card-hover)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--card)'; }}>
+                        <span style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-3)', minWidth:22, flexShrink:0, marginTop:2, textAlign:'right' }}>{String(itemIdx + 1).padStart(2, '0')}</span>
+                        <div style={{ display:'flex', flexDirection:'column', gap:3, flex:1 }}>
+                          <span style={{ fontSize:13, fontWeight:500, color:'var(--text-1)', lineHeight:1.45 }}>{it.name}</span>
+                          {it.description && it.description.trim() && (
+                            <span style={{ fontSize:13, color:'var(--text-2)', lineHeight:1.5, fontWeight:400 }}>{it.description}</span>
+                          )}
+                          {it.issuedBy && it.issuedBy.trim() && (
+                            <span style={{ fontSize:11, fontWeight:400, color:'var(--text-3)', fontStyle:'italic' }}>→ {it.issuedBy}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              ))}
+
+              {/* Checklists */}
+              {hasChecklists && (
+                <Section title="Required Documents Checklist">
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {loc.raw.checklist.existing && loc.raw.checklist.existing.length > 0 && (
+                      <ChecklistBlock title="Existing Members" items={loc.raw.checklist.existing} />
+                    )}
+                    {loc.raw.checklist.dealers && loc.raw.checklist.dealers.length > 0 && (
+                      <ChecklistBlock title="Dealers" items={loc.raw.checklist.dealers} />
+                    )}
+                    {loc.raw.checklist.nonDealers && loc.raw.checklist.nonDealers.length > 0 && (
+                      <ChecklistBlock title="Non-Dealers" items={loc.raw.checklist.nonDealers} />
+                    )}
+                  </div>
+                </Section>
+              )}
+
+              {/* Permitted Roles */}
+              {hasPermittedRoles && (
+                <Section title="Permitted Signer Roles">
+                  <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                    {loc.raw.permittedRoles.acceptable && loc.raw.permittedRoles.acceptable.length > 0 && (
+                      <div>
+                        <div style={{ fontSize:11, fontWeight:600, color:'var(--success)', letterSpacing:'0.04em', textTransform:'uppercase', marginBottom:8 }}>Acceptable Signers</div>
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                          {loc.raw.permittedRoles.acceptable.map((role, idx) => (
+                            <span key={idx} style={{ padding:'4px 10px', background:'rgba(52,211,153,0.08)', border:'1px solid rgba(52,211,153,0.25)', borderRadius:'var(--radius-pill)', fontSize:11, fontWeight:500, color:'var(--success)' }}>{role}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {loc.raw.permittedRoles.unacceptable && loc.raw.permittedRoles.unacceptable.length > 0 && (
+                      <div>
+                        <div style={{ fontSize:11, fontWeight:600, color:'var(--warning)', letterSpacing:'0.04em', textTransform:'uppercase', marginBottom:8 }}>Unacceptable Signers</div>
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                          {loc.raw.permittedRoles.unacceptable.map((role, idx) => (
+                            <span key={idx} style={{ padding:'4px 10px', background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.25)', borderRadius:'var(--radius-pill)', fontSize:11, fontWeight:500, color:'var(--danger)' }}>{role}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </Section>
+              )}
+
+              {/* Links */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                <div>
+                  <SectionLabel>Official Links</SectionLabel>
+                  {loc.officialLinks && loc.officialLinks.length > 0 ? loc.officialLinks.map((l, i) => (
+                    <LinkCard key={i} title={l.title} url={l.url} />
+                  )) : (
+                    <div style={{ padding:'9px 12px', background:'var(--card)', borderRadius:'var(--radius-card)', border:'1px dashed var(--border)', fontSize:12, color:'var(--text-3)', fontWeight:400, lineHeight:1.45 }}>Not available in dataset.</div>
+                  )}
+                </div>
+                <div>
+                  <SectionLabel>Copart Resources</SectionLabel>
+                  {loc.copartLinks.map((l, i) => <LinkCard key={i} title={l.title} url={l.url} />)}
+                </div>
+              </div>
+
+              {/* Notes */}
+              {loc.raw && loc.raw.notes && loc.raw.notes.length > 0 && (
+                <div style={{ background:'var(--accent-glow)', border:'1px solid rgba(34,211,238,0.08)', borderRadius:'var(--radius-card)', padding:'12px 14px' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                    <Shield style={{ width:12, height:12, color:'var(--accent)' }} />
+                    <span style={{ fontSize:11, fontWeight:600, color:'var(--accent)', letterSpacing:'0.06em', textTransform:'uppercase' }}>Notes</span>
+                  </div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    {loc.raw.notes.map((n, i) => (
+                      <div key={i} style={{ fontSize:13, color:'var(--text-2)', lineHeight:1.5, fontWeight:400, paddingLeft:12, borderLeft:'2px solid rgba(34,211,238,0.12)' }}>{n}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ height:1, background:'var(--border)' }} />
+
+              {/* Member Response Box */}
+              <div>
+                <SectionLabel>Copy Paste Data</SectionLabel>
+                <div style={{ position:'relative', background:'rgba(4,6,14,0.8)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-card)', padding:16, fontFamily:'var(--font-mono)', fontSize:'clamp(11px,1vw,13px)', color:'var(--text-2)', lineHeight:1.7, letterSpacing:'0.01em', maxHeight:180, overflowY:'auto', whiteSpace:'pre-wrap', userSelect:'text' }}>
+                  <span style={{ position:'absolute', top:8, right:10, fontSize:9, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--text-4)' }}>Response</span>
+                  {rawText}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <CopyBtn label="Copy Response" copiedLabel="Copied" icon={Copy} active={copiedKey === 'response'} primary onClick={copyResponse} />
+                <CopyBtn label="Copy Requirements" copiedLabel="Copied" icon={FileText} active={copiedKey === 'docs'} onClick={copyDocs} />
+                <CopyBtn label="Copy Links" copiedLabel="Copied" icon={ExternalLink} active={copiedKey === 'links'} onClick={copyLinks} />
+                <CopyBtn label="Download PDF" icon={Download} onClick={downloadPdf} />
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      );
+    };
+
+    // ─── Shared Components ───
+
+    const Section = ({ title, children }) => (
+      <div>
+        <SectionLabel>{title}</SectionLabel>
+        {children}
+      </div>
+    );
+
+    const SectionLabel = ({ children }) => (
+      <div style={{ fontSize:11, fontWeight:600, color:'var(--text-3)', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10, paddingBottom:6, borderBottom:'1px solid var(--border)' }}>{children}</div>
+    );
+
+    const ChecklistBlock = ({ title, items }) => (
+      <div style={{ background:'rgba(255,255,255,0.01)', border:'1px solid var(--border)', borderRadius:'var(--radius-card)', padding:14 }}>
+        <div style={{ fontSize:11, fontWeight:600, color:'var(--accent)', letterSpacing:'0.04em', textTransform:'uppercase', marginBottom:8 }}>{title}</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          {items.map((item, idx) => (
+            <div key={idx} style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:'var(--text-2)', fontWeight:400 }}>
+              <Check style={{ width:14, height:14, color:'var(--success)', flexShrink:0 }} />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    const LinkCard = ({ title, url }) => (
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'9px 12px', background:'var(--card)', border:'1px solid var(--border)', borderRadius:'var(--radius-card)', fontSize:12, fontWeight:500, color:'var(--text-2)', textDecoration:'none', transition:'all 0.18s cubic-bezier(0.22,1,0.36,1)', marginBottom:6 }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-2)'; }}>
+        <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', paddingRight:8 }}>{title}</span>
+        <ExternalLink style={{ width:10, height:10, flexShrink:0, color:'var(--text-4)' }} />
+      </a>
+    );
+
+    const CopyBtn = ({ label, copiedLabel, icon: Icon, active, primary, onClick }) => (
+      <button onClick={onClick}
+        onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
+        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+        style={{
+          padding:'11px 12px', borderRadius:'var(--radius-button)', fontSize: primary ? 13 : 12, fontWeight:600, cursor:'pointer', transition:'all 0.18s cubic-bezier(0.22,1,0.36,1)', display:'flex', alignItems:'center', justifyContent:'center', gap:7, border:'none',
+          ...(primary
+            ? { background: active ? 'var(--success)' : 'var(--accent)', color: active ? '#fff' : 'var(--bg)', animation: active ? 'copyPulse 0.3s ease' : 'none' }
+            : { background: active ? 'rgba(34,211,238,0.08)' : 'var(--card)', color: active ? 'var(--accent)' : 'var(--text-2)', border:'1px solid var(--border-strong)' })
+        }}
+        onMouseEnter={e => {
+          if (primary && !active) e.currentTarget.style.opacity = '0.9';
+          if (!primary && !active) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }
+        }}
+        onMouseLeave={e => {
+          if (primary && !active) e.currentTarget.style.opacity = '1';
+          if (!primary && !active) { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-2)'; }
+        }}>
+        {active ? <Check style={{ width:14, height:14, strokeWidth:3, color: primary ? '#fff' : 'var(--success)' }} /> : <Icon style={{ width:14, height:14 }} />}
+        {active ? (copiedLabel || 'Copied') : label}
+      </button>
+    );
+
+    // ─── Mount ───
+    createRoot(document.getElementById('root')).render(<App />);
+  </script>
+
+</body>
+</html>
