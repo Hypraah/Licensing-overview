@@ -184,12 +184,37 @@
       100% { transform: scale(1); }
     }
 
-    /* ─── Custom Cursor ─── */
-    @media (pointer: fine) {
-      body, button, a, select, input, tr, [onClick], [role="button"] {
-        cursor: none !important;
+    /* Custom cursor removed for accessibility */
+
+    /* ─── Mobile Responsive ─── */
+    @media (max-width: 1024px) {
+      .panel { border-radius: 12px; }
+    }
+    @media (max-width: 768px) {
+      body { overflow: auto; height: auto; min-height: 100vh; }
+      .panel { border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+      .mobile-detail-overlay {
+        position: fixed; inset: 0; z-index: 100;
+        background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+      }
+      .mobile-detail-sheet {
+        position: fixed; left: 0; right: 0; bottom: 0; top: 60px;
+        z-index: 101;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        border-radius: 18px 18px 0 0;
+        overflow: hidden;
+        display: flex; flex-direction: column;
+        animation: slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      @keyframes slideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
       }
     }
+
   </style>
 
   <script>
@@ -211,12 +236,16 @@
   <div class="bg-noise"></div>
   <div class="bg-vignette"></div>
 
+
   <div id="root" style="position:relative;z-index:1;width:100%;height:100vh;overflow:hidden;display:flex;flex-direction:column"></div>
 
   <script>
     window.USA_DATA = __USA_DATA__;
     window.CANADA_DATA = __CANADA_DATA__;
     window.INTL_DATA = __INTL_DATA__;
+    window.WORLD_GEO = __WORLD_GEO__;
+    window.US_GEO = __US_GEO__;
+    window.CA_GEO = __CA_GEO__;
   </script>
 
   <script type="text/babel" data-type="module">
@@ -225,7 +254,7 @@
     import { motion, AnimatePresence } from "https://cdn.jsdelivr.net/npm/framer-motion@11.11.17/+esm";
     import {
       Globe2, Search, FileText, Copy, Check, ExternalLink, Download,
-      MapPin, List, Compass, Shield, X, ChevronRight, AlertTriangle
+      List, Compass, Shield, X, ChevronRight, AlertTriangle
     } from "https://cdn.jsdelivr.net/npm/lucide-react@0.468.0/+esm";
 
     const ease = [0.22, 1, 0.36, 1];
@@ -596,16 +625,7 @@
         setTimeout(() => onDone(), 600);
       }, [onDone]);
 
-      useEffect(() => {
-        const handleKeyDown = (e) => { if (e.key === 'Enter') triggerExit(); };
-        const handleClick = () => triggerExit();
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('click', handleClick);
-        return () => {
-          window.removeEventListener('keydown', handleKeyDown);
-          window.removeEventListener('click', handleClick);
-        };
-      }, [triggerExit]);
+      /* Intro only dismisses via the explicit button click — no global listeners */
 
       useEffect(() => {
         const canvas = canvasRef.current;
@@ -656,7 +676,7 @@
         <div ref={overlayRef} style={{
           position: 'fixed', inset: 0, zIndex: 99999, background: '#020408',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          pointerEvents: exiting ? 'none' : 'auto', cursor: 'pointer',
+          pointerEvents: exiting ? 'none' : 'auto',
           willChange: 'clip-path, opacity',
           animation: exiting ? 'irisOpen 0.6s cubic-bezier(0.76, 0, 0.24, 1) reverse forwards' : 'none',
         }}>
@@ -728,7 +748,15 @@
       return 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 180 / Math.PI;
     };
     const filterOverlappingLabels = (labels, minDeg) => {
-      const sorted = [...labels].sort((a, b) => (b.text || '').length - (a.text || '').length);
+      const sorted = [...labels].sort((a, b) => {
+        const typeA = a.loc ? a.loc.regionType : '';
+        const typeB = b.loc ? b.loc.regionType : '';
+        const isPriorityA = typeA === 'usa_state' || typeA === 'canada_province';
+        const isPriorityB = typeB === 'usa_state' || typeB === 'canada_province';
+        if (isPriorityA && !isPriorityB) return -1;
+        if (!isPriorityA && isPriorityB) return 1;
+        return (b.text || '').length - (a.text || '').length;
+      });
       const kept = [];
       for (const lb of sorted) {
         let tooClose = false;
@@ -738,151 +766,144 @@
       return kept;
     };
 
-    // ─── Custom Cursor ───
-    const CustomCursor = () => {
-      const [pos, setPos] = useState({ x: 0, y: 0 });
-      const [trail, setTrail] = useState({ x: 0, y: 0 });
-      const [hovered, setHovered] = useState(false);
-      const [visible, setVisible] = useState(false);
-      useEffect(() => {
-        if (window.matchMedia('(pointer: coarse)').matches) return;
-        const onMouseMove = (e) => { setPos({ x: e.clientX, y: e.clientY }); if (!visible) setVisible(true); };
-        const onMouseLeave = () => setVisible(false);
-        const onMouseEnter = () => setVisible(true);
-        window.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseleave', onMouseLeave);
-        document.addEventListener('mouseenter', onMouseEnter);
-        return () => { window.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseleave', onMouseLeave); document.removeEventListener('mouseenter', onMouseEnter); };
-      }, [visible]);
-      useEffect(() => {
-        if (window.matchMedia('(pointer: coarse)').matches) return;
-        let af = null;
-        const tick = () => { setTrail(prev => ({ x: prev.x + (pos.x - prev.x) * 0.16, y: prev.y + (pos.y - prev.y) * 0.16 })); af = requestAnimationFrame(tick); };
-        af = requestAnimationFrame(tick);
-        return () => { if (af) cancelAnimationFrame(af); };
-      }, [pos]);
-      useEffect(() => {
-        if (window.matchMedia('(pointer: coarse)').matches) return;
-        const onHoverStart = () => setHovered(true);
-        const onHoverEnd = () => setHovered(false);
-        const attachListeners = () => {
-          const clickables = document.querySelectorAll('button, a, select, input, tr, [onClick], [role="button"]');
-          clickables.forEach(el => { el.addEventListener('mouseenter', onHoverStart); el.addEventListener('mouseleave', onHoverEnd); });
-        };
-        attachListeners();
-        const observer = new MutationObserver(attachListeners);
-        observer.observe(document.body, { childList: true, subtree: true });
-        return () => observer.disconnect();
-      }, []);
-      if (!visible || window.matchMedia('(pointer: coarse)').matches) return null;
-      return (
-        <>
-          <div style={{ position:'fixed', left:pos.x, top:pos.y, width:6, height:6, background:'var(--accent)', borderRadius:'50%', transform:'translate(-50%,-50%)', pointerEvents:'none', zIndex:999999, boxShadow:'0 0 8px var(--accent)' }} />
-          <div style={{ position:'fixed', left:trail.x, top:trail.y, width:hovered?36:22, height:hovered?36:22, border:hovered?'1.5px solid var(--accent)':'1px solid rgba(34,211,238,0.45)', background:hovered?'rgba(34,211,238,0.05)':'transparent', borderRadius:'50%', transform:'translate(-50%,-50%)', pointerEvents:'none', zIndex:999998, transition:'width 0.18s cubic-bezier(0.25,1,0.5,1), height 0.18s cubic-bezier(0.25,1,0.5,1), border 0.18s ease, background 0.18s ease', boxShadow:hovered?'0 0 16px rgba(34,211,238,0.2)':'none' }} />
-        </>
-      );
-    };
 
-    // ─── Flat Map View ───
-    const FlatMap = ({ polys, selected, selectRegion }) => {
-      const containerRef = useRef(null);
-      const [dims, setDims] = useState({ w: 1200, h: 600 });
-      const [hovIdx, setHovIdx] = useState(null);
-      const [tooltip, setTooltip] = useState(null);
-
-      useEffect(() => {
-        const el = containerRef.current;
-        if (!el) return;
-        const update = () => setDims({ w: el.clientWidth, h: el.clientHeight });
-        update();
-        window.addEventListener('resize', update);
-        return () => window.removeEventListener('resize', update);
-      }, []);
-
-      const projectPt = useCallback((coord) => {
-        const x = (coord[0] + 180) * (dims.w / 360);
-        const y = (90 - coord[1]) * (dims.h / 180);
-        return [x, y];
-      }, [dims]);
-
-      const ringToSvg = useCallback((ring) => {
-        return ring.map((c, i) => {
-          const [x, y] = projectPt(c);
-          return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-        }).join(' ') + 'Z';
-      }, [projectPt]);
-
-      const featureToPath = useCallback((f) => {
-        const g = f.geometry;
-        if (!g) return '';
-        if (g.type === 'Polygon') return g.coordinates.map(r => ringToSvg(r)).join(' ');
-        if (g.type === 'MultiPolygon') return g.coordinates.map(p => p.map(r => ringToSvg(r)).join(' ')).join(' ');
-        return '';
-      }, [ringToSvg]);
-
-      const graticules = useMemo(() => {
-        const lines = [];
-        for (let lat = -60; lat <= 60; lat += 30) {
-          const [x1, y1] = projectPt([-180, lat]);
-          const [x2, y2] = projectPt([180, lat]);
-          lines.push(`M${x1},${y1}L${x2},${y2}`);
-        }
-        for (let lng = -180; lng <= 180; lng += 30) {
-          const [x1, y1] = projectPt([lng, -90]);
-          const [x2, y2] = projectPt([lng, 90]);
-          lines.push(`M${x1},${y1}L${x2},${y2}`);
-        }
-        return lines;
-      }, [projectPt]);
-
-      const paths = useMemo(() => {
-        return polys.map((f, i) => ({ d: featureToPath(f), match: f.properties?.match, polyType: f.properties?._polyType, idx: i }));
-      }, [polys, featureToPath]);
-
-      return (
-        <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', background: 'var(--bg-2)', overflow: 'hidden' }}>
-          <svg width={dims.w} height={dims.h} style={{ display: 'block' }}>
-            {graticules.map((d, i) => (<path key={`g${i}`} d={d} fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.5" />))}
-            {paths.map(p => {
-              if (!p.d) return null;
-              const isSel = selected && p.match && selected.id === p.match.id;
-              const isHov = hovIdx === p.idx;
-              return (
-                <path key={p.idx} d={p.d}
-                  fill={isSel ? 'rgba(34,211,238,0.15)' : isHov && p.match ? 'var(--accent-dim)' : p.match ? 'var(--card)' : 'rgba(255,255,255,0.02)'}
-                  stroke={isSel ? '#22D3EE' : isHov && p.match ? 'rgba(34,211,238,0.5)' : p.match ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)'}
-                  strokeWidth={isSel ? 1.2 : 0.5}
-                  style={{ cursor: p.match ? 'pointer' : 'default', transition: 'fill 0.15s, stroke 0.15s' }}
-                  onMouseEnter={(e) => { setHovIdx(p.idx); if (p.match) setTooltip({ x: e.clientX, y: e.clientY, name: p.match.name, type: regionLabel(p.match.regionType) }); }}
-                  onMouseMove={(e) => { if (p.match) setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null); }}
-                  onMouseLeave={() => { setHovIdx(null); setTooltip(null); }}
-                  onClick={() => { if (p.match) selectRegion(p.match); }}
-                />
-              );
-            })}
-          </svg>
-          {tooltip && (
-            <div style={{ position:'fixed', left:tooltip.x+12, top:tooltip.y-8, zIndex:100, background:'rgba(13,18,32,0.95)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 12px', pointerEvents:'none', boxShadow:'0 8px 32px rgba(0,0,0,0.4)', backdropFilter:'blur(12px)' }}>
-              <div style={{ fontSize:13, fontWeight:500, color:'var(--text-1)' }}>{tooltip.name}</div>
-              <div style={{ fontSize:11, color:'var(--text-3)', marginTop:1 }}>{tooltip.type}</div>
-            </div>
-          )}
-        </div>
-      );
-    };
 
     // ═══════════════════════════════════════════════════════════════
     // APP
     // ═══════════════════════════════════════════════════════════════
+    // ─── Mobile Detection Hook ───
+    const useIsMobile = (breakpoint = 768) => {
+      const [isMobile, setIsMobile] = useState(window.innerWidth <= breakpoint);
+      useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth <= breakpoint);
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+      }, [breakpoint]);
+      return isMobile;
+    };
+
+    // ─── Sidebar List (shared between globe, map, list views) ───
+    const SidebarList = ({
+      width = 340,
+      showSearch = true,
+      view,
+      filtered,
+      query,
+      setQuery,
+      filter,
+      setFilter,
+      tabs,
+      tabCounts,
+      selId,
+      selectRegion
+    }) => (
+      <div style={{ width, height:'100%', flexShrink:0, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative', background: view === 'list' ? 'var(--surface)' : 'transparent', borderRight: view === 'list' ? '1px solid var(--border)' : 'none' }}>
+        <SidebarShimmer />
+        
+        {/* Glassmorphic Sticky Header */}
+        <div style={{ position:'absolute', top:0, left:0, right:0, zIndex:10, background:'rgba(10,15,30,0.7)', backdropFilter:'blur(12px) saturate(180%)', WebkitBackdropFilter:'blur(12px) saturate(180%)', borderBottom:'1px solid var(--border)', padding:'14px 20px 10px' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+            <span style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--text-3)' }}>Region Explorer</span>
+            <span style={{ fontSize:10, fontWeight:500, color:'var(--text-3)', background:'var(--card)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-pill)', padding:'2px 7px' }}>{filtered.length}</span>
+          </div>
+          {showSearch && (
+            <div style={{ position:'relative', marginBottom:8 }}>
+              <Search style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', width:13, height:13, color:'var(--text-3)' }} />
+              <input type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter regions..."
+                style={{ width:'100%', background:'var(--card)', border:'1px solid var(--border)', borderRadius:'var(--radius-input)', padding:'8px 12px 8px 32px', fontSize:12, fontWeight:500, color:'var(--text-1)', outline:'none', transition:'all 0.18s ease', fontFamily:'var(--font-sans)' }}
+                onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px var(--accent-glow)'; }}
+                onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }}
+              />
+            </div>
+          )}
+          <div style={{ display:'flex', gap:4 }}>
+            {tabs.map(t => {
+              const isActive = filter === t.id;
+              return (
+                <button key={t.id} onClick={() => setFilter(t.id)}
+                  style={{ flex:1, padding:'6px 4px', borderRadius:6, fontSize:11, fontWeight:500, border: isActive ? '1px solid rgba(34,211,238,0.2)' : '1px solid transparent', cursor:'pointer', transition:'all 0.18s cubic-bezier(0.22,1,0.36,1)', background: isActive ? 'var(--accent-dim)' : 'transparent', color: isActive ? 'var(--accent)' : 'var(--text-3)', display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                  {t.label}
+                  <span style={{ fontSize:9, color: isActive ? 'var(--accent)' : 'var(--text-4)', fontWeight:400 }}>({tabCounts[t.id]})</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Region list */}
+        <div style={{ flex:1, overflowY:'auto', padding:'120px 8px 8px 8px' }}>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'48px 20px', color:'var(--text-3)', fontSize:13, fontWeight:500, lineHeight:1.5 }}>
+              No regions found.<br/>Try a state, province, or country name.
+            </div>
+          ) : filtered.map((loc, idx) => {
+            const isSel = selId === loc.id;
+            const delay = Math.min(idx * 18, 320);
+            return (
+              <div key={loc.id} onClick={() => selectRegion(loc)}
+                style={{
+                  padding: isSel ? '10px 16px 10px 20px' : '10px 16px',
+                  borderRadius: 10, display:'flex', alignItems:'center', justifyContent:'space-between',
+                  cursor:'pointer', transition:'all 0.18s cubic-bezier(0.22,1,0.36,1)', marginBottom:2,
+                  background: isSel ? 'var(--card-active)' : 'transparent',
+                  borderLeft: isSel ? '3px solid var(--accent)' : '3px solid transparent',
+                  animation: `fade-in 0.3s ease ${delay}ms both`,
+                }}
+                onMouseEnter={e => { if (!isSel) { e.currentTarget.style.background='var(--card-hover)'; e.currentTarget.style.paddingLeft='20px'; e.currentTarget.style.borderLeft='3px solid var(--accent)'; }}}
+                onMouseLeave={e => { if (!isSel) { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='16px'; e.currentTarget.style.borderLeft='3px solid transparent'; }}}>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <FlagDisplay loc={loc} size={16} />
+                  <div>
+                    <div style={{ fontSize:13, fontWeight: isSel ? 600 : 500, color: isSel ? 'var(--accent)' : 'var(--text-1)', lineHeight:1.3 }}>{loc.name}</div>
+                    <div style={{ fontSize:11, color:'var(--text-3)', marginTop:1, fontWeight:400 }}>{regionLabel(loc.regionType)}</div>
+                  </div>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  {isSel && <span style={{ width:5, height:5, borderRadius:'50%', background:'var(--accent)', boxShadow:'0 0 8px var(--accent)' }} />}
+                  <ChevronRight style={{ width:12, height:12, color: isSel ? 'var(--accent)' : 'var(--text-4)', transition:'all 0.15s', opacity: isSel ? 1 : 0.5, flexShrink:0 }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    // ─── Mobile Detail Sheet Component ───
+    const MobileDetailSheet = ({ isMobile, mobileDetailOpen, setMobileDetailOpen, selected, notify, copiedKey }) => {
+      if (!isMobile || !mobileDetailOpen || !selected) return null;
+      return (
+        <>
+          <div className="mobile-detail-overlay" onClick={() => setMobileDetailOpen(false)} />
+          <div className="mobile-detail-sheet">
+            <div style={{ padding:'12px 20px 8px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <FlagDisplay loc={selected} size={18} />
+                <span style={{ fontSize:16, fontWeight:600, color:'var(--text-1)' }}>{selected.name}</span>
+              </div>
+              <button onClick={() => setMobileDetailOpen(false)}
+                style={{ width:32, height:32, borderRadius:8, background:'var(--card)', border:'1px solid var(--border)', cursor:'pointer', color:'var(--text-3)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <X style={{ width:16, height:16 }} />
+              </button>
+            </div>
+            <div style={{ flex:1, overflow:'hidden' }}>
+              <DetailPanel loc={selected} notify={notify} copiedKey={copiedKey} onClose={() => setMobileDetailOpen(false)} />
+            </div>
+          </div>
+        </>
+      );
+    };
+
     const App = () => {
-      const [view, setView] = useState('globe');
+      const isMobile = useIsMobile();
+      const [view, setView] = useState(() => window.innerWidth <= 768 ? 'list' : 'globe');
       const [filter, setFilter] = useState('all');
       const [query, setQuery] = useState('');
       const [selId, setSelId] = useState(null);
-      const [accType, setAccType] = useState('dealer');
       const [toast, setToast] = useState('');
       const [copiedKey, setCopiedKey] = useState('');
       const [showIntro, setShowIntro] = useState(true);
+      const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
       const globeContainerRef = useRef(null);
       const globeRef = useRef(null);
       const searchRef = useRef(null);
@@ -903,7 +924,46 @@
         let r = allLocs;
         if (filter !== 'all') r = r.filter(l => l.regionType === filter);
         const q = query.toLowerCase().trim();
-        if (q) r = r.filter(l => l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q));
+        if (q) {
+          r = r.filter(l => {
+            // 1. Direct name, code, or country match
+            if (l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q) || (l.country && l.country.toLowerCase().includes(q))) return true;
+
+            // 2. Official link titles & URLs (DMV Names)
+            if (l.officialLinks && l.officialLinks.some(lnk => lnk.title.toLowerCase().includes(q) || lnk.url.toLowerCase().includes(q))) return true;
+
+            // 3. Raw requirements (DMV authorities, requirement titles, descriptions)
+            if (l.raw && l.raw.requirements) {
+              const reqMatch = l.raw.requirements.some(sec =>
+                (sec.section || '').toLowerCase().includes(q) ||
+                (sec.items || []).some(it =>
+                  (it.name || '').toLowerCase().includes(q) ||
+                  (it.description || '').toLowerCase().includes(q) ||
+                  (it.issuedBy || '').toLowerCase().includes(q)
+                )
+              );
+              if (reqMatch) return true;
+            }
+
+            // 4. Checklist document requirements
+            if (l.raw && l.raw.checklist) {
+              const checkMatch = Object.values(l.raw.checklist).some(arr =>
+                Array.isArray(arr) && arr.some(item => (item || '').toLowerCase().includes(q))
+              );
+              if (checkMatch) return true;
+            }
+
+            // 5. Permitted Signer Roles
+            if (l.raw && l.raw.permittedRoles) {
+              const roleMatch = Object.values(l.raw.permittedRoles).some(arr =>
+                Array.isArray(arr) && arr.some(role => (role || '').toLowerCase().includes(q))
+              );
+              if (roleMatch) return true;
+            }
+
+            return false;
+          });
+        }
         return r;
       }, [allLocs, filter, query]);
 
@@ -922,25 +982,53 @@
       const selectRegion = useCallback((loc) => {
         if (!loc) return;
         setSelId(loc.id);
-        if (view === 'globe' && globeRef.current && loc.center.lat !== 0) {
+        window.location.hash = `/region/${loc.id}`;
+        if (isMobile) setMobileDetailOpen(true);
+        if (globeRef.current) {
           globeRef.current.controls().autoRotate = false;
-          globeRef.current.pointOfView({ lat: loc.center.lat, lng: loc.center.lng, altitude: 1.2 }, 1400);
+          const lat = loc.center?.lat || loc.lat || (loc.raw && loc.raw.lat);
+          const lng = loc.center?.lng || loc.lng || (loc.raw && loc.raw.lng);
+          if (lat && lng) {
+            globeRef.current.pointOfView({ lat, lng, altitude: 1.8 }, 1400);
+          }
         }
-      }, [view]);
+      }, [isMobile]);
+
+      // Restore region from URL hash on load
+      useEffect(() => {
+        const hash = window.location.hash;
+        if (hash.startsWith('#/region/')) {
+          const id = hash.replace('#/region/', '');
+          const loc = allLocs.find(l => l.id === id);
+          if (loc) {
+            setSelId(loc.id);
+            setShowIntro(false);
+          }
+        }
+        const onHashChange = () => {
+          const h = window.location.hash;
+          if (h.startsWith('#/region/')) {
+            const id = h.replace('#/region/', '');
+            const loc = allLocs.find(l => l.id === id);
+            if (loc) setSelId(loc.id);
+          }
+        };
+        window.addEventListener('hashchange', onHashChange);
+        return () => window.removeEventListener('hashchange', onHashChange);
+      }, [allLocs]);
 
       useEffect(() => {
-        const handler = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchRef.current?.focus(); } };
+        const handler = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); const inp = document.querySelector('input[placeholder*="Search"], input[placeholder*="Filter"]'); inp?.focus(); } };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
       }, []);
 
-      // ─── GeoJSON ───
+      // ─── GeoJSON (embedded at build time) ───
       useEffect(() => {
-        Promise.all([
-          fetch('https://unpkg.com/three-globe/example/data/ne_110m_admin_0_countries.geojson').then(r => r.json()),
-          fetch('https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/united-states.geojson').then(r => r.json()),
-          fetch('https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/canada.geojson').then(r => r.json())
-        ]).then(([world, us, ca]) => {
+        try {
+          const world = window.WORLD_GEO || { features: [] };
+          const us = window.US_GEO || { features: [] };
+          const ca = window.CA_GEO || { features: [] };
           const norm = n => n.toLowerCase().replace(/[^a-z0-9]/g, '');
           const worldF = world.features.filter(f => {
             const n = f.properties.name || f.properties.ADMIN || '';
@@ -951,8 +1039,12 @@
           });
           const usF = us.features.map(f => ({ ...f, properties: { ...f.properties, _polyType: 'us', match: allLocs.find(l => l.regionType === 'usa_state' && norm(l.name) === norm(f.properties.name)) } }));
           const caF = ca.features.map(f => ({ ...f, properties: { ...f.properties, _polyType: 'ca', match: allLocs.find(l => l.regionType === 'canada_province' && norm(l.name) === norm(f.properties.name)) } }));
-          setPolys([...worldF, ...usF, ...caF]);
-        }).catch(console.error);
+          const all = [...worldF, ...usF, ...caF];
+          console.log(`%cGeoJSON loaded: ${all.length} polygons (${worldF.length} world, ${usF.length} US, ${caF.length} CA)`, 'color:#34D399;font-weight:600');
+          setPolys(all);
+        } catch (err) {
+          console.error('GeoJSON processing failed:', err);
+        }
       }, [allLocs]);
 
       // ─── Globe Init ───
@@ -1010,9 +1102,9 @@
           .arcColor(() => 'rgba(34,211,238,0.18)')
           .arcStroke(0.4)
           .arcAltitudeAutoScale(0.25)
-          .arcDashLength(0.3)
-          .arcDashGap(0.7)
-          .arcDashAnimateTime(6000);
+          .arcDashLength(0.35)
+          .arcDashGap(4)
+          .arcDashAnimateTime(5000);
 
         const onResize = () => { if (el && g) { g.width(el.clientWidth); g.height(el.clientHeight); } };
         window.addEventListener('resize', onResize);
@@ -1035,10 +1127,6 @@
             if (pt === 'ca') return 'rgba(34, 211, 238, 0.40)';
             if (d.properties.match) return 'rgba(148, 220, 255, 0.45)';
             return 'rgba(255,255,255,0.08)';
-          })
-          .polygonStrokeWidth(d => {
-            if (selected && d.properties.match && selected.id === d.properties.match.id) return 1.4;
-            return d.properties._polyType === 'us' ? 0.5 : 0.4;
           })
           .polygonSideColor(() => 'rgba(0,0,0,0)')
           .polygonAltitude(d => {
@@ -1104,7 +1192,7 @@
             loc: l
           };
         }).filter(Boolean);
-        const labels = filterOverlappingLabels(rawLabels, 3.5);
+        const labels = filterOverlappingLabels(rawLabels, 1.0);
         g.labelsData(labels)
           .labelLat('lat').labelLng('lng').labelText('text')
           .labelColor('color').labelSize('size')
@@ -1125,84 +1213,11 @@
         { id: 'list', label: 'List', I: List }
       ];
 
-      // ─── Sidebar List (shared between globe, map, list views) ───
-      const SidebarList = ({ width = 340, showSearch = true }) => (
-        <div style={{ width, height:'100%', flexShrink:0, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative', background: view === 'list' ? 'var(--surface)' : 'transparent', borderRight: view === 'list' ? '1px solid var(--border)' : 'none' }}>
-          <SidebarShimmer />
-          <div style={{ padding:'16px 20px 12px', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
-              <span style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--text-3)' }}>Region Explorer</span>
-              <span style={{ fontSize:10, fontWeight:500, color:'var(--text-3)', background:'var(--card)', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-pill)', padding:'2px 7px' }}>{filtered.length}</span>
-            </div>
-            {showSearch && (
-              <div style={{ position:'relative' }}>
-                <Search style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', width:13, height:13, color:'var(--text-3)' }} />
-                <input type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter regions..."
-                  style={{ width:'100%', background:'var(--card)', border:'1px solid var(--border)', borderRadius:'var(--radius-input)', padding:'8px 12px 8px 32px', fontSize:12, fontWeight:500, color:'var(--text-1)', outline:'none', transition:'all 0.18s ease', fontFamily:'var(--font-sans)' }}
-                  onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px var(--accent-glow)'; }}
-                  onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }}
-                />
-              </div>
-            )}
-          </div>
-          {/* Filter tabs */}
-          <div style={{ padding:'6px 16px', borderBottom:'1px solid var(--border)', display:'flex', gap:4, flexShrink:0 }}>
-            {tabs.map(t => {
-              const isActive = filter === t.id;
-              return (
-                <button key={t.id} onClick={() => setFilter(t.id)}
-                  style={{ flex:1, padding:'6px 8px', borderRadius:6, fontSize:12, fontWeight:500, border: isActive ? '1px solid rgba(34,211,238,0.2)' : '1px solid transparent', cursor:'pointer', transition:'all 0.18s cubic-bezier(0.22,1,0.36,1)', background: isActive ? 'var(--accent-dim)' : 'transparent', color: isActive ? 'var(--accent)' : 'var(--text-3)', display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
-                  {t.label}
-                  <span style={{ fontSize:10, color: isActive ? 'var(--accent)' : 'var(--text-4)', fontWeight:400 }}>({tabCounts[t.id]})</span>
-                </button>
-              );
-            })}
-          </div>
-          {/* Region list */}
-          <div style={{ flex:1, overflowY:'auto', padding:'8px 8px' }}>
-            {filtered.length === 0 ? (
-              <div style={{ textAlign:'center', padding:'48px 20px', color:'var(--text-3)', fontSize:13, fontWeight:500, lineHeight:1.5 }}>
-                No regions found.<br/>Try a state, province, or country name.
-              </div>
-            ) : filtered.map((loc, idx) => {
-              const isSel = selId === loc.id;
-              const delay = Math.min(idx * 18, 320);
-              return (
-                <div key={loc.id} onClick={() => selectRegion(loc)}
-                  style={{
-                    padding: isSel ? '10px 16px 10px 20px' : '10px 16px',
-                    borderRadius: 10, display:'flex', alignItems:'center', justifyContent:'space-between',
-                    cursor:'pointer', transition:'all 0.18s cubic-bezier(0.22,1,0.36,1)', marginBottom:2,
-                    background: isSel ? 'var(--card-active)' : 'transparent',
-                    borderLeft: isSel ? '3px solid var(--accent)' : '3px solid transparent',
-                    animation: `fade-in 0.3s ease ${delay}ms both`,
-                  }}
-                  onMouseEnter={e => { if (!isSel) { e.currentTarget.style.background='var(--card-hover)'; e.currentTarget.style.paddingLeft='20px'; e.currentTarget.style.borderLeft='3px solid var(--accent)'; }}}
-                  onMouseLeave={e => { if (!isSel) { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='16px'; e.currentTarget.style.borderLeft='3px solid transparent'; }}}>
-                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                    <FlagDisplay loc={loc} size={16} />
-                    <div>
-                      <div style={{ fontSize:13, fontWeight: isSel ? 600 : 500, color: isSel ? 'var(--accent)' : 'var(--text-1)', lineHeight:1.3 }}>{loc.name}</div>
-                      <div style={{ fontSize:11, color:'var(--text-3)', marginTop:1, fontWeight:400 }}>{regionLabel(loc.regionType)}</div>
-                    </div>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    {isSel && <span style={{ width:5, height:5, borderRadius:'50%', background:'var(--accent)', boxShadow:'0 0 8px var(--accent)' }} />}
-                    <ChevronRight style={{ width:12, height:12, color: isSel ? 'var(--accent)' : 'var(--text-4)', transition:'all 0.15s', opacity: isSel ? 1 : 0.5, flexShrink:0 }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-
-      // ─── Render ───
       return (
         <>
-        <CustomCursor />
         {showIntro && <IntroOverlay onDone={() => setShowIntro(false)} />}
-        <div style={{ flex:1, width:'100%', height:'100%', display:'flex', flexDirection:'column', position:'relative', fontFamily:'var(--font-sans)' }}>
+        <MobileDetailSheet isMobile={isMobile} mobileDetailOpen={mobileDetailOpen} setMobileDetailOpen={setMobileDetailOpen} selected={selected} notify={notify} copiedKey={copiedKey} />
+        <div style={{ flex:1, width:'100%', height: isMobile ? 'auto' : '100%', minHeight: isMobile ? '100vh' : undefined, display:'flex', flexDirection:'column', position:'relative', fontFamily:'var(--font-sans)' }}>
 
           {/* Toast */}
           <AnimatePresence>
@@ -1216,60 +1231,110 @@
           </AnimatePresence>
 
           {/* ═══ Navbar ═══ */}
-          <header style={{ height:56, flexShrink:0, zIndex:30, padding:'0 24px', borderBottom:'1px solid var(--border)', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:16 }}>
-            {/* Left: Logo + Label */}
-            <div style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', flexShrink:0 }} onClick={() => { setView('globe'); setSelId(null); }}>
-              <CopartLogo height={28} />
-              <div style={{ width:1, height:20, background:'var(--border-strong)' }} />
-              <span style={{ fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:'0.08em', color:'var(--text-3)', textTransform:'uppercase', fontWeight:500 }}>Licensing Intelligence</span>
-            </div>
-
-            {/* Center: Search */}
-            <div style={{ position:'relative', width:'100%', maxWidth:480, flexShrink:1 }}>
-              <Search style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', width:14, height:14, color:'var(--text-3)' }} />
-              <input ref={searchRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
-                placeholder={`Search ${allLocs.length} regions...`}
-                style={{ width:'100%', background:'var(--card)', border:'1px solid var(--border)', borderRadius:'var(--radius-input)', padding:'10px 16px 10px 40px', fontSize:13, fontWeight:500, color:'var(--text-1)', outline:'none', transition:'all 0.18s ease', fontFamily:'var(--font-sans)' }}
-                onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px var(--accent-glow)'; }}
-                onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }}
-              />
-              <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:10, color:'var(--text-4)', fontWeight:500, pointerEvents:'none', border:'1px solid var(--border-strong)', borderRadius:4, padding:'2px 6px', background:'var(--card)', fontFamily:'var(--font-mono)' }}>Ctrl K</span>
-            </div>
-
-            {/* Right: View Toggle + Counter */}
-            <div style={{ display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
-              <div style={{ display:'flex', alignItems:'center', border:'1px solid var(--border-strong)', borderRadius:8, overflow:'hidden' }}>
-                {viewModes.map((t, i) => (
-                  <React.Fragment key={t.id}>
-                    {i > 0 && <div style={{ width:1, height:20, background:'var(--border-strong)' }} />}
-                    <button onClick={() => setView(t.id)}
-                      onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
-                      onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
-                      style={{ padding:'7px 12px', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:5, border:'none', cursor:'pointer', transition:'all 0.18s ease', background: view === t.id ? 'var(--accent-dim)' : 'transparent', color: view === t.id ? 'var(--accent)' : 'var(--text-3)' }}>
-                      <t.I style={{ width:13, height:13 }} /> {t.label}
-                    </button>
-                  </React.Fragment>
-                ))}
+          {isMobile ? (
+            <header style={{ flexShrink:0, zIndex:30, borderBottom:'1px solid var(--border)', background:'var(--bg)' }}>
+              {/* Top row: Logo + View toggle */}
+              <div style={{ height:48, padding:'0 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }} onClick={() => { setView('list'); setSelId(null); }}>
+                  <CopartLogo height={22} />
+                  <span style={{ fontFamily:'var(--font-mono)', fontSize:9, letterSpacing:'0.06em', color:'var(--text-3)', textTransform:'uppercase', fontWeight:500 }}>Licensing</span>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                  <div style={{ display:'flex', alignItems:'center', border:'1px solid var(--border-strong)', borderRadius:6, overflow:'hidden' }}>
+                    {viewModes.filter(t => t.id !== 'globe').map((t, i) => (
+                      <React.Fragment key={t.id}>
+                        {i > 0 && <div style={{ width:1, height:16, background:'var(--border-strong)' }} />}
+                        <button onClick={() => setView(t.id)}
+                          style={{ padding:'5px 10px', fontSize:11, fontWeight:600, display:'flex', alignItems:'center', gap:4, border:'none', cursor:'pointer', transition:'all 0.15s ease', background: view === t.id ? 'var(--accent-dim)' : 'transparent', color: view === t.id ? 'var(--accent)' : 'var(--text-3)' }}>
+                          <t.I style={{ width:11, height:11 }} /> {t.label}
+                        </button>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  <span style={{ fontSize:10, color:'var(--text-3)', fontFamily:'var(--font-mono)', fontWeight:500 }}>{allLocs.length}</span>
+                </div>
               </div>
-              <span style={{ fontSize:11, color:'var(--text-3)', fontFamily:'var(--font-mono)', fontWeight:500, whiteSpace:'nowrap' }}>{allLocs.length} regions</span>
-            </div>
-          </header>
+              {/* Search row */}
+              <div style={{ padding:'0 16px 10px' }}>
+                <div style={{ position:'relative' }}>
+                  <Search style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', width:13, height:13, color:'var(--text-3)' }} />
+                  <input ref={searchRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
+                    placeholder={`Search ${allLocs.length} regions...`}
+                    style={{ width:'100%', background:'var(--card)', border:'1px solid var(--border)', borderRadius:8, padding:'9px 12px 9px 34px', fontSize:13, fontWeight:500, color:'var(--text-1)', outline:'none', fontFamily:'var(--font-sans)' }}
+                    onFocus={e => { e.target.style.borderColor = 'var(--accent)'; }}
+                    onBlur={e => { e.target.style.borderColor = 'var(--border)'; }}
+                  />
+                </div>
+              </div>
+              {/* Filter tabs */}
+              <div style={{ padding:'0 12px 8px', display:'flex', gap:4 }}>
+                {tabs.map(t => {
+                  const isActive = filter === t.id;
+                  return (
+                    <button key={t.id} onClick={() => setFilter(t.id)}
+                      style={{ flex:1, padding:'6px 4px', borderRadius:6, fontSize:11, fontWeight:500, border: isActive ? '1px solid rgba(34,211,238,0.2)' : '1px solid transparent', cursor:'pointer', background: isActive ? 'var(--accent-dim)' : 'transparent', color: isActive ? 'var(--accent)' : 'var(--text-3)', display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                      {t.label} <span style={{ fontSize:9, color: isActive ? 'var(--accent)' : 'var(--text-4)' }}>({tabCounts[t.id]})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </header>
+          ) : (
+            <header style={{ height:56, flexShrink:0, zIndex:30, padding:'0 24px', borderBottom:'1px solid var(--border)', background:'var(--bg)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:16 }}>
+              {/* Left: Logo + Label */}
+              <div style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', flexShrink:0 }} onClick={() => { setView('globe'); setSelId(null); }}>
+                <CopartLogo height={28} />
+                <div style={{ width:1, height:20, background:'var(--border-strong)' }} />
+                <span style={{ fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:'0.08em', color:'var(--text-3)', textTransform:'uppercase', fontWeight:500 }}>Licensing Intelligence</span>
+              </div>
+
+              {/* Center: Search */}
+              <div style={{ position:'relative', width:'100%', maxWidth:480, flexShrink:1 }}>
+                <Search style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', width:14, height:14, color:'var(--text-3)' }} />
+                <input ref={searchRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
+                  placeholder={`Search ${allLocs.length} regions...`}
+                  style={{ width:'100%', background:'var(--card)', border:'1px solid var(--border)', borderRadius:'var(--radius-input)', padding:'10px 16px 10px 40px', fontSize:13, fontWeight:500, color:'var(--text-1)', outline:'none', transition:'all 0.18s ease', fontFamily:'var(--font-sans)' }}
+                  onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px var(--accent-glow)'; }}
+                  onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.boxShadow = 'none'; }}
+                />
+                <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:10, color:'var(--text-4)', fontWeight:500, pointerEvents:'none', border:'1px solid var(--border-strong)', borderRadius:4, padding:'2px 6px', background:'var(--card)', fontFamily:'var(--font-mono)' }}>Ctrl K</span>
+              </div>
+
+              {/* Right: View Toggle + Counter */}
+              <div style={{ display:'flex', alignItems:'center', gap:12, flexShrink:0 }}>
+                <div style={{ display:'flex', alignItems:'center', border:'1px solid var(--border-strong)', borderRadius:8, overflow:'hidden' }}>
+                  {viewModes.map((t, i) => (
+                    <React.Fragment key={t.id}>
+                      {i > 0 && <div style={{ width:1, height:20, background:'var(--border-strong)' }} />}
+                      <button onClick={() => setView(t.id)}
+                        onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
+                        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                        style={{ padding:'7px 12px', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:5, border:'none', cursor:'pointer', transition:'all 0.18s ease', background: view === t.id ? 'var(--accent-dim)' : 'transparent', color: view === t.id ? 'var(--accent)' : 'var(--text-3)' }}>
+                        <t.I style={{ width:13, height:13 }} /> {t.label}
+                      </button>
+                    </React.Fragment>
+                  ))}
+                </div>
+                <span style={{ fontSize:11, color:'var(--text-3)', fontFamily:'var(--font-mono)', fontWeight:500, whiteSpace:'nowrap' }}>{allLocs.length} regions</span>
+              </div>
+            </header>
+          )}
 
           {/* ═══ Main Area ═══ */}
-          <div style={{ flex:1, width:'100%', position:'relative', overflow:'hidden' }}>
+          <div style={{ flex:1, width:'100%', position:'relative', overflow: isMobile ? 'auto' : 'hidden' }}>
 
-            {/* ─── Globe View ─── */}
-            {view === 'globe' && (
+            {/* ─── Globe View (desktop only) ─── */}
+            {view === 'globe' && !isMobile && (
               <div style={{ width:'100%', height:'100%', position:'relative', display:'flex' }}>
                 <div ref={globeContainerRef} style={{ position:'absolute', inset:0, zIndex:0, cursor:'grab' }} />
                 {/* Left Explorer Panel */}
                 <div className="panel" style={{ position:'absolute', left:24, top:24, bottom:24, width:340, zIndex:10, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-                  <SidebarList width={340} />
+                  <SidebarList width={340} view={view} filtered={filtered} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} tabs={tabs} tabCounts={tabCounts} selId={selId} selectRegion={selectRegion} />
                 </div>
                 {/* Right Detail Panel */}
                 <div className="panel" style={{ position:'absolute', right:24, top:24, bottom:24, width:440, zIndex:10, display:'flex', flexDirection:'column', overflow:'hidden' }}>
                   {selected ? (
-                    <DetailPanel loc={selected} accType={accType} setAccType={setAccType} notify={notify} copiedKey={copiedKey} onClose={() => setSelId(null)} />
+                    <DetailPanel loc={selected} notify={notify} copiedKey={copiedKey} onClose={() => setSelId(null)} />
                   ) : (
                     <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40, textAlign:'center' }}>
                       <Compass style={{ width:28, height:28, color:'var(--text-4)', marginBottom:14 }} />
@@ -1282,12 +1347,12 @@
             )}
 
 
-            {/* ─── List View ─── */}
-            {view === 'list' && (
+            {/* ─── List View (Desktop) ─── */}
+            {view === 'list' && !isMobile && (
               <div style={{ width:'100%', height:'100%', display:'flex', overflow:'hidden' }}>
                 {/* Sidebar */}
                 <div style={{ width:320, height:'100%', flexShrink:0, borderRight:'1px solid var(--border)', background:'var(--surface)', backdropFilter:'blur(28px)', display:'flex', flexDirection:'column', position:'relative' }}>
-                  <SidebarList width={320} showSearch={true} />
+                  <SidebarList width={320} showSearch={true} view={view} filtered={filtered} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} tabs={tabs} tabCounts={tabCounts} selId={selId} selectRegion={selectRegion} />
                 </div>
                 {/* Table */}
                 <div style={{ flex:1, height:'100%', overflow:'hidden', display:'flex', flexDirection:'column', padding:24 }}>
@@ -1319,7 +1384,7 @@
                               <td style={{ padding:'12px 20px', fontSize:11, fontWeight:600, color:'var(--accent)', textTransform:'uppercase', letterSpacing:'0.03em' }}>{regionLabel(r.regionType)}</td>
                               <td style={{ padding:'12px 20px', color:'var(--text-2)' }}>{r.country}</td>
                               <td style={{ padding:'12px 20px', color:'var(--text-2)', fontFamily:'var(--font-mono)' }}>{dc}</td>
-                              <td style={{ padding:'12px 20px', color:'var(--text-3)', fontSize:12 }}>May 2026</td>
+                              <td style={{ padding:'12px 20px', color:'var(--text-3)', fontSize:12 }}>{new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</td>
                               <td style={{ padding:'12px 20px', textAlign:'right' }}>
                                 <button onClick={e => { e.stopPropagation(); selectRegion(r); }}
                                   style={{ padding:'6px 16px', background:'var(--accent-dim)', border:'1px solid rgba(34,211,238,0.15)', borderRadius:'var(--radius-pill)', fontSize:12, fontWeight:600, color:'var(--accent)', cursor:'pointer', transition:'all 0.18s ease' }}
@@ -1338,7 +1403,7 @@
                 {/* Right Detail */}
                 <div style={{ width:420, height:'100%', flexShrink:0, borderLeft:'1px solid var(--border)', background:'rgba(8,12,20,0.9)', backdropFilter:'blur(20px)', display:'flex', flexDirection:'column' }}>
                   {selected ? (
-                    <DetailPanel loc={selected} accType={accType} setAccType={setAccType} notify={notify} copiedKey={copiedKey} onClose={() => setSelId(null)} />
+                    <DetailPanel loc={selected} notify={notify} copiedKey={copiedKey} onClose={() => setSelId(null)} />
                   ) : (
                     <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40, textAlign:'center' }}>
                       <Compass style={{ width:28, height:28, color:'var(--text-4)', marginBottom:14 }} />
@@ -1349,12 +1414,44 @@
                 </div>
               </div>
             )}
+
+            {/* ─── List View (Mobile) ─── */}
+            {view === 'list' && isMobile && (
+              <div style={{ width:'100%', minHeight:'calc(100vh - 140px)', display:'flex', flexDirection:'column' }}>
+                <div style={{ flex:1, overflowY:'auto', padding:'4px 0' }}>
+                  {filtered.length === 0 ? (
+                    <div style={{ textAlign:'center', padding:'48px 20px', color:'var(--text-3)', fontSize:13 }}>
+                      No regions found.
+                    </div>
+                  ) : filtered.map((loc, idx) => {
+                    const isSel = selId === loc.id;
+                    return (
+                      <div key={loc.id} onClick={() => selectRegion(loc)}
+                        style={{
+                          padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between',
+                          cursor:'pointer', borderBottom:'1px solid var(--border)',
+                          background: isSel ? 'var(--card-active)' : 'transparent',
+                        }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                          <FlagDisplay loc={loc} size={18} />
+                          <div>
+                            <div style={{ fontSize:14, fontWeight: isSel ? 600 : 500, color: isSel ? 'var(--accent)' : 'var(--text-1)', lineHeight:1.3 }}>{loc.name}</div>
+                            <div style={{ fontSize:11, color:'var(--text-3)', marginTop:2 }}>{regionLabel(loc.regionType)}</div>
+                          </div>
+                        </div>
+                        <ChevronRight style={{ width:14, height:14, color: isSel ? 'var(--accent)' : 'var(--text-4)', flexShrink:0 }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Footer */}
-          <footer style={{ height:36, flexShrink:0, zIndex:30, borderTop:'1px solid var(--border)', background:'var(--bg)', padding:'0 24px', display:'flex', alignItems:'center', justifyContent:'space-between', fontSize:11, color:'var(--text-4)', fontWeight:500, letterSpacing:'0.02em' }}>
-            <span>Copart Member Services · Licensing Intelligence Platform</span>
-            <span>Built by Pratham Thakur · Hyderabad · © 2026 Copart Inc.</span>
+          <footer style={{ height: isMobile ? 32 : 36, flexShrink:0, zIndex:30, borderTop:'1px solid var(--border)', background:'var(--bg)', padding: isMobile ? '0 12px' : '0 24px', display:'flex', alignItems:'center', justifyContent:'space-between', fontSize: isMobile ? 9 : 11, color:'var(--text-4)', fontWeight:500, letterSpacing:'0.02em' }}>
+            <span>Copart Member Services · Licensing Intelligence</span>
+            <span>{isMobile ? '© 2026 Copart' : 'Built by Pratham Thakur · Hyderabad · © 2026 Copart Inc.'}</span>
           </footer>
         </div>
         </>
@@ -1364,7 +1461,7 @@
     // ═══════════════════════════════════════════════════════════════
     // DETAIL PANEL
     // ═══════════════════════════════════════════════════════════════
-    const DetailPanel = ({ loc, accType, setAccType, notify, copiedKey, onClose }) => {
+    const DetailPanel = ({ loc, notify, copiedKey, onClose }) => {
       const rawText = useMemo(() => generateRawResponse(loc), [loc]);
 
       const hasChecklists = loc.raw && loc.raw.checklist && (
@@ -1458,15 +1555,15 @@
           initial={{ x: 32, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30, duration: 0.3 }}
-          style={{ flex:1, display:'flex', flexDirection:'column', height:'100%', overflow:'hidden' }}>
+          style={{ flex:1, display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', position:'relative' }}>
 
           {/* Header */}
-          <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+          <div style={{ position:'absolute', top:0, left:0, right:0, height:64, padding:'0 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', zIndex:10, background:'rgba(10,15,30,0.7)', backdropFilter:'blur(12px) saturate(180%)', WebkitBackdropFilter:'blur(12px) saturate(180%)' }}>
             <div style={{ borderLeft:'3px solid var(--accent)', paddingLeft:12, display:'flex', alignItems:'center', gap:10 }}>
               <FlagDisplay loc={loc} size={22} />
               <div>
-                <div style={{ fontSize:20, fontWeight:600, color:'var(--text-1)', lineHeight:1.3, letterSpacing:'-0.01em' }}>{loc.name}</div>
-                <div style={{ fontSize:11, color:'var(--text-3)', marginTop:2, fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase' }}>{loc.country} · {regionLabel(loc.regionType)}</div>
+                <div style={{ fontSize:18, fontWeight:600, color:'var(--text-1)', lineHeight:1.2, letterSpacing:'-0.01em' }}>{loc.name}</div>
+                <div style={{ fontSize:10, color:'var(--text-3)', marginTop:1, fontWeight:500, letterSpacing:'0.06em', textTransform:'uppercase' }}>{loc.country} · {regionLabel(loc.regionType)}</div>
               </div>
             </div>
             <button onClick={onClose}
@@ -1478,7 +1575,7 @@
           </div>
 
           {/* Content */}
-          <div style={{ flex:1, overflowY:'auto', padding:'16px 20px' }}>
+          <div style={{ flex:1, overflowY:'auto', padding:'76px 20px 20px' }}>
             <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
 
               {/* Bid Card Warning */}
@@ -1493,21 +1590,6 @@
                   </div>
                 </div>
               )}
-
-              {/* Account Type Selector */}
-              <div>
-                <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--text-3)', marginBottom:8 }}>Account Type</div>
-                <select value={accType} onChange={e => setAccType(e.target.value)}
-                  style={{ width:'100%', background:'#0d1220', border:'1px solid var(--border-strong)', borderRadius:'var(--radius-button)', fontSize:13, padding:'8px 12px', color:'var(--text-1)', fontFamily:'var(--font-sans)', outline:'none', transition:'all 0.18s ease', cursor:'pointer', colorScheme:'dark', WebkitAppearance:'none', appearance:'none', backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat:'no-repeat', backgroundPosition:'right 12px center', paddingRight:32 }}
-                  onFocus={e => { e.target.style.borderColor='var(--accent)'; e.target.style.boxShadow='0 0 0 3px var(--accent-glow)'; }}
-                  onBlur={e => { e.target.style.borderColor='var(--border-strong)'; e.target.style.boxShadow='none'; }}>
-                  <option value="dealer" style={{background:'#0d1220',color:'#F1F5F9'}}>Dealer</option>
-                  <option value="business" style={{background:'#0d1220',color:'#F1F5F9'}}>Business</option>
-                  <option value="individual" style={{background:'#0d1220',color:'#F1F5F9'}}>Individual</option>
-                  <option value="broker" style={{background:'#0d1220',color:'#F1F5F9'}}>Broker</option>
-                  <option value="international" style={{background:'#0d1220',color:'#F1F5F9'}}>International</option>
-                </select>
-              </div>
 
               {/* General Requirements */}
               {loc.generalReq && (
@@ -1704,6 +1786,7 @@
     // ─── Mount ───
     createRoot(document.getElementById('root')).render(<App />);
   </script>
+
 
 </body>
 </html>

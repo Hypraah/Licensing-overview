@@ -1,5 +1,31 @@
 // Compiler script: reads country_data_clean.json + index_template.html and generates final index.html
 const fs = require('fs');
+const https = require('https');
+
+// Helper: download a URL and return its text content (follows redirects)
+function downloadURL(url, maxRedirects = 5) {
+  return new Promise((resolve, reject) => {
+    if (maxRedirects <= 0) return reject(new Error('Too many redirects'));
+    const parsedUrl = new URL(url);
+    https.get(parsedUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        // Handle relative and absolute redirects
+        const redirectUrl = new URL(res.headers.location, url).href;
+        res.resume();
+        downloadURL(redirectUrl, maxRedirects - 1).then(resolve).catch(reject);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+        return;
+      }
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve(data));
+    }).on('error', reject);
+  });
+}
 
 if (!fs.existsSync('country_data_clean.json')) {
   console.error('Error: country_data_clean.json not found! Please run node fetch_data.js first.');
@@ -124,9 +150,9 @@ const getProvCode = (name) => {
   return codes[name] || 'ON';
 };
 
-// Clean up items that leaked "ACCEPTABLE TITLES" or formatting marks, and de-duplicate by name
+// Clean up items that leaked "ACCEPTABLE TITLES" or formatting marks, and de-duplicate by type-scoped name
 const uniqueData = [];
-const seenNames = new Set();
+const seenKeys = new Set();
 
 data.forEach(c => {
   if (!c) return;
@@ -153,8 +179,11 @@ data.forEach(c => {
     c.requirements = c.requirements.filter(r => r.items && r.items.length > 0);
   }
 
-  if (!seenNames.has(nameTrim)) {
-    seenNames.add(nameTrim);
+  // De-duplicate using a composite key of type + name to allow regions of different types
+  // (like the USA state Georgia and international country Georgia) to coexist!
+  const dupeKey = `${c.type}_${nameTrim}`;
+  if (!seenKeys.has(dupeKey)) {
+    seenKeys.add(dupeKey);
     
     // Add pre-computed spatial coordinates to each object
     let lat = 0;
@@ -194,11 +223,51 @@ console.log(`Total database entries: ${uniqueData.length}`);
 console.log('\nReading index_template.html...');
 const template = fs.readFileSync('index_template.html', 'utf-8');
 
-console.log('Compiling final index.html by injecting JSON datasets...');
-const compiled = template
-  .replace('__USA_DATA__', JSON.stringify(usaData))
-  .replace('__CANADA_DATA__', JSON.stringify(canadaData))
-  .replace('__INTL_DATA__', JSON.stringify(intlData));
+// GeoJSON URLs for the flat map (using reliable direct sources)
+const GEO_URLS = {
+  world: 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson',
+  us: 'https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/united-states.geojson',
+  ca: 'https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/canada.geojson'
+};
 
-fs.writeFileSync('index.html', compiled, 'utf-8');
-console.log(`\nSuccess! Final index.html successfully compiled (${(compiled.length / 1024).toFixed(1)} KB)`);
+async function build() {
+  // Download GeoJSON files and embed them inline
+  console.log('\nDownloading GeoJSON map data...');
+  let worldGeo = '{"type":"FeatureCollection","features":[]}';
+  let usGeo = '{"type":"FeatureCollection","features":[]}';
+  let caGeo = '{"type":"FeatureCollection","features":[]}';
+
+  try {
+    const [w, u, c] = await Promise.all([
+      downloadURL(GEO_URLS.world),
+      downloadURL(GEO_URLS.us),
+      downloadURL(GEO_URLS.ca)
+    ]);
+    worldGeo = w;
+    usGeo = u;
+    caGeo = c;
+    // Validate JSON
+    const wj = JSON.parse(worldGeo);
+    const uj = JSON.parse(usGeo);
+    const cj = JSON.parse(caGeo);
+    console.log(`  World: ${wj.features.length} features (${(worldGeo.length/1024).toFixed(0)} KB)`);
+    console.log(`  US States: ${uj.features.length} features (${(usGeo.length/1024).toFixed(0)} KB)`);
+    console.log(`  Canada: ${cj.features.length} features (${(caGeo.length/1024).toFixed(0)} KB)`);
+  } catch (err) {
+    console.warn('  Warning: GeoJSON download failed, map view will use CDN fallback:', err.message);
+  }
+
+  console.log('\nCompiling final index.html by injecting datasets...');
+  const compiled = template
+    .replace('__USA_DATA__', JSON.stringify(usaData))
+    .replace('__CANADA_DATA__', JSON.stringify(canadaData))
+    .replace('__INTL_DATA__', JSON.stringify(intlData))
+    .replace('__WORLD_GEO__', worldGeo)
+    .replace('__US_GEO__', usGeo)
+    .replace('__CA_GEO__', caGeo);
+
+  fs.writeFileSync('index.html', compiled, 'utf-8');
+  console.log(`\nSuccess! Final index.html successfully compiled (${(compiled.length / 1024).toFixed(1)} KB)`);
+}
+
+build().catch(err => { console.error('Build failed:', err); process.exit(1); });
